@@ -20,17 +20,17 @@ app.get("/", (req, res) => {
   data.push({ key: newKey, hwid: null, usedAt: null });
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 
-  res.send(\`
-    <html>
-      <head><title>Sua Key</title></head>
-      <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
-        <h1>Sua key exclusiva:</h1>
-        <p style="font-size:22px;font-weight:bold;font-family:monospace">\${newKey}</p>
-        <p>Use no seu programa. A key é válida por 24h após o primeiro uso e apenas em 1 computador.</p>
-      </body>
-    </html>
-  \`);
-});
+res.send(`
+  <html>
+    <head><title>Sua Key</title></head>
+    <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
+      <h1>Sua key exclusiva:</h1>
+      <p style="font-size:22px;font-weight:bold;font-family:monospace">${newKey}</p>
+      <p>Use no seu programa. A key é válida por 24h após o primeiro uso e apenas em 1 computador.</p>
+    </body>
+  </html>
+`);
+
 
 app.get("/check/:key", (req, res) => {
   const key = req.params.key.trim().toLowerCase();
