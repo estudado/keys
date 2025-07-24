@@ -90,18 +90,24 @@ app.get("/check/:key", (req, res) => {
 
   const now = Date.now();
 
-  if (!entry.hwid) {
-    entry.hwid = hwid;
-    entry.usedAt = now;
+if (!entry.hwid) {
+  entry.hwid = hwid;
+  entry.usedAt = Date.now(); // marca como usada agora
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  return res.send("VALID");
+}
+
+if (entry.hwid === hwid) {
+  if (!entry.usedAt) {
+    entry.usedAt = Date.now(); // primeira vez que está usando
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
     return res.send("VALID");
   }
 
-  if (entry.hwid === hwid) {
-    const elapsed = now - entry.usedAt;
-    if (elapsed <= 24 * 60 * 60 * 1000) return res.send("VALID");
-    else return res.send("EXPIRED");
-  }
+  const elapsed = Date.now() - entry.usedAt;
+  if (elapsed <= 24 * 60 * 60 * 1000) return res.send("VALID");
+  else return res.send("EXPIRED");
+}
 
   return res.send("USED_BY_OTHER");
 });
