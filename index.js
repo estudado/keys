@@ -17,7 +17,7 @@ function gerarKey() {
   return key;
 }
 
-// Rota /go
+// ROTA /go
 app.get("/go", (req, res) => {
   const hwid = req.query.hwid;
   const src = req.query.src || "linkvertise";
@@ -25,7 +25,7 @@ app.get("/go", (req, res) => {
   res.redirect(`/?src=${encodeURIComponent(src)}&hwid=${encodeURIComponent(hwid)}`);
 });
 
-// Rota principal /
+// ROTA PRINCIPAL /
 app.get("/", (req, res) => {
   try {
     const referer = req.headers.referer || "";
@@ -47,37 +47,37 @@ app.get("/", (req, res) => {
 
     if (ultima && now - ultima.generatedAt < 24 * 60 * 60 * 1000) {
       const restante = Math.ceil((24 * 60 * 60 * 1000 - (now - ultima.generatedAt)) / (60 * 1000));
-      return res.send(\`
+      return res.send(`
         <html>
           <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
             <h1>Limite diário atingido</h1>
-            <p>Você já gerou uma key hoje. Tente novamente em aproximadamente \${restante} minutos.</p>
+            <p>Você já gerou uma key hoje. Tente novamente em aproximadamente ${restante} minutos.</p>
           </body>
         </html>
-      \`);
+      `);
     }
 
     const novaKey = gerarKey();
     data.push({ key: novaKey, hwid: hwid, usedAt: null, generatedAt: now });
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 
-    res.send(\`
+    res.send(`
       <html>
         <head><title>Sua Key</title></head>
         <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
           <h1>Sua key exclusiva:</h1>
-          <p style="font-size:22px;font-weight:bold;font-family:monospace">\${novaKey}</p>
+          <p style="font-size:22px;font-weight:bold;font-family:monospace">${novaKey}</p>
           <p>Use no seu programa. A key é válida por 24h após o primeiro uso e apenas em 1 computador.</p>
         </body>
       </html>
-    \`);
+    `);
   } catch (err) {
     console.error("Erro na rota /:", err);
     res.status(500).send("Erro interno no servidor.");
   }
 });
 
-// Rota /check corrigida
+// ROTA /check/:key
 app.get("/check/:key", (req, res) => {
   const key = req.params.key.trim().toLowerCase();
   const hwid = (req.query.hwid || "").trim();
@@ -113,7 +113,7 @@ app.get("/check/:key", (req, res) => {
   return res.send("USED_BY_OTHER");
 });
 
-// Painel /admin
+// PAINEL /admin
 app.get("/admin", (req, res) => {
   const auth = req.query.auth;
   if (auth !== "SENHA123") return res.status(403).send("Acesso negado.");
@@ -127,17 +127,17 @@ app.get("/admin", (req, res) => {
     : "";
 
   const rows = data
-    .map(k => \`
+    .map(k => `
       <tr>
-        <td>\${k.key}</td>
-        <td>\${k.hwid}</td>
-        <td>\${k.generatedAt ? new Date(k.generatedAt).toLocaleString() : "-"}</td>
-        <td>\${k.usedAt ? new Date(k.usedAt).toLocaleString() : "-"}</td>
+        <td>${k.key}</td>
+        <td>${k.hwid}</td>
+        <td>${k.generatedAt ? new Date(k.generatedAt).toLocaleString() : "-"}</td>
+        <td>${k.usedAt ? new Date(k.usedAt).toLocaleString() : "-"}</td>
       </tr>
-    \`)
+    `)
     .join("");
 
-  res.send(\`
+  res.send(`
     <html>
       <head>
         <title>Admin - Painel de Keys</title>
@@ -153,16 +153,16 @@ app.get("/admin", (req, res) => {
         <h2>Painel de Admin</h2>
 
         <form method="GET" action="/admin">
-          <input type="hidden" name="auth" value="\${auth}"/>
+          <input type="hidden" name="auth" value="${auth}"/>
           <label>Verificar se a key existe:</label><br/>
           <input type="text" name="keyverificada" required />
           <button type="submit">Verificar</button>
         </form>
-        <p><strong>\${resultadoVerificacao}</strong></p>
+        <p><strong>${resultadoVerificacao}</strong></p>
 
         <hr/>
 
-        <form method="POST" action="/admin/create?auth=\${auth}">
+        <form method="POST" action="/admin/create?auth=${auth}">
           <label>Gerar key manual para HWID:</label><br/>
           <input type="text" name="hwid" required />
           <button type="submit">Criar Key</button>
@@ -176,14 +176,14 @@ app.get("/admin", (req, res) => {
             <th>Gerada em</th>
             <th>Usada em</th>
           </tr>
-          \${rows}
+          ${rows}
         </table>
       </body>
     </html>
-  \`);
+  `);
 });
 
-// Criação de key manual
+// /admin/create
 app.post("/admin/create", (req, res) => {
   const auth = req.query.auth;
   if (auth !== "SENHA123") return res.status(403).send("Acesso negado.");
