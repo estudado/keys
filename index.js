@@ -5,7 +5,6 @@ const app = express();
 const DATA_FILE = "keys.json";
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, "[]");
 
-// Gera key aleatória com 40 caracteres minúsculos
 function gerarKey() {
   const caracteres = "abcdefghijklmnopqrstuvwxyz0123456789";
   let key = "";
@@ -15,8 +14,19 @@ function gerarKey() {
   return key;
 }
 
-// Página que exibe a nova key
 app.get("/", (req, res) => {
+  const referer = req.headers.referer || "";
+  if (!referer.includes("linkvertise.com")) {
+    return res.status(403).send(`
+      <html>
+        <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
+          <h1>Acesso Negado</h1>
+          <p>Você precisa acessar este link através do Linkvertise.</p>
+        </body>
+      </html>
+    `);
+  }
+
   const newKey = gerarKey();
   const data = JSON.parse(fs.readFileSync(DATA_FILE));
   data.push({ key: newKey, hwid: null, usedAt: null });
@@ -34,7 +44,6 @@ app.get("/", (req, res) => {
   `);
 });
 
-// Verificação da key
 app.get("/check/:key", (req, res) => {
   const key = req.params.key.trim().toLowerCase();
   const hwid = (req.query.hwid || "").trim();
