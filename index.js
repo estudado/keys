@@ -1,88 +1,96 @@
-const express = require("express");
-const fs = require("fs");
+const express = require('express');
+const Database = require('better-sqlite3');
+const path = require('path');
 const app = express();
+const db = new Database('keys.db');
 
-const DATA_FILE = "keys.json";
-if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, "[]");
+// Criação da tabela
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS keys (
+    key TEXT PRIMARY KEY,
+    hwid TEXT,
+    usedAt INTEGER
+  )
+`).run();
 
+// Gera key aleatória
 function gerarKey() {
-  const caracteres = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let key = "";
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let key = '';
   for (let i = 0; i < 40; i++) {
-    key += caracteres.charAt(Math.floor(Math.random() * caracteres.length));
+    key += chars[Math.floor(Math.random() * chars.length)];
   }
   return key;
 }
 
-app.get("/", (req, res) => {
-  try {
-    const referer = req.headers.referer || "";
-    const src = req.query.src || "";
+// Middleware opcional para logs
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
 
-    const isFromLinkvertise = referer.includes("linkvertise.com");
-    const isFromLootlabs = referer.includes("loot-link.com") || src === "lootlabs";
+// Rota para gerar nova key
+app.get('/', (req, res) => {
+  const referer = req.headers.referer || '';
+  const src = req.query.src || '';
 
-    if (!isFromLinkvertise && !isFromLootlabs) {
-      return res.status(403).send(`
-        <html>
-          <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
-            <h1>Acesso Negado</h1>
-            <p>Você precisa acessar este link através do Linkvertise ou LootLabs.</p>
-          </body>
-        </html>
-      `);
-    }
+  const isFromLinkvertise = referer.includes('linkvertise.com');
+  const isFromLootlabs = referer.includes('loot-link.com') || src === 'lootlabs';
 
-    const newKey = gerarKey();
-    const data = JSON.parse(fs.readFileSync(DATA_FILE));
-    data.push({ key: newKey, hwid: null, usedAt: null });
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-
-    res.send(`
+  if (!isFromLinkvertise && !isFromLootlabs) {
+    return res.status(403).send(`
       <html>
-        <head><title>Sua Key</title></head>
         <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
-          <h1>Sua key exclusiva:</h1>
-          <p style="font-size:22px;font-weight:bold;font-family:monospace">${newKey}</p>
-          <p>Use no seu programa. A key é válida por 24h após o primeiro uso e apenas em 1 computador.</p>
+          <h1>Acesso Negado</h1>
+          <p>Você precisa acessar este link através do Linkvertise ou LootLabs.</p>
         </body>
       </html>
     `);
-  } catch (err) {
-    console.error("Erro na rota /:", err);
-    res.status(500).send("Erro interno no servidor.");
   }
+
+  const newKey = gerarKey();
+  db.prepare("INSERT INTO keys (key, hwid, usedAt) VALUES (?, NULL, NULL)").run(newKey);
+
+  res.send(`
+    <html>
+      <head><title>Sua Key</title></head>
+      <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
+        <h1>Sua key exclusiva:</h1>
+        <p style="font-size:22px;font-weight:bold;font-family:monospace">${newKey}</p>
+        <p>Use no seu programa. A key é válida por 24h após o primeiro uso e apenas em 1 computador.</p>
+      </body>
+    </html>
+  `);
 });
 
-app.get("/check/:key", (req, res) => {
+// Rota para verificar a key
+app.get('/check/:key', (req, res) => {
   const key = req.params.key.trim().toLowerCase();
   const hwid = (req.query.hwid || "").trim();
 
   if (!key || !hwid) return res.send("MISSING");
 
-  let data = JSON.parse(fs.readFileSync(DATA_FILE));
-  const entry = data.find(k => k.key === key);
-
-  if (!entry) return res.send("INVALID");
-
+  const row = db.prepare("SELECT * FROM keys WHERE key = ?").get(key);
   const now = Date.now();
 
-  if (!entry.hwid) {
-    entry.hwid = hwid;
-    entry.usedAt = now;
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  if (!row) return res.send("INVALID");
+
+  if (!row.hwid) {
+    db.prepare("UPDATE keys SET hwid = ?, usedAt = ? WHERE key = ?").run(hwid, now, key);
     return res.send("VALID");
   }
 
-  if (entry.hwid === hwid) {
-    const elapsed = now - entry.usedAt;
+  if (row.hwid === hwid) {
+    const elapsed = now - row.usedAt;
     if (elapsed <= 24 * 60 * 60 * 1000) return res.send("VALID");
-    else return res.send("EXPIRED");
+    return res.send("EXPIRED");
   }
 
   return res.send("USED_BY_OTHER");
 });
 
-app.listen(3000, () => {
-  console.log("Servidor rodando na porta 3000");
+// Inicia servidor
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
 });
