@@ -16,7 +16,7 @@ function gerarKey() {
 
 app.get("/go", (req, res) => {
   const hwid = req.query.hwid;
-  const src = req.query.src || "linkvertise"; // fallback padrão
+  const src = req.query.src || "linkvertise";
   if (!hwid) return res.status(400).send("HWID ausente.");
   res.redirect(`/?src=${encodeURIComponent(src)}&hwid=${encodeURIComponent(hwid)}`);
 });
@@ -31,14 +31,7 @@ app.get("/", (req, res) => {
     const isFromWorkInk = referer.includes("work.ink") || src === "workink";
 
     if (!isFromLinkvertise && !isFromWorkInk) {
-      return res.status(403).send(`
-        <html>
-          <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
-            <h1>Acesso Negado</h1>
-            <p>Você precisa acessar este link através do Linkvertise ou Work.ink.</p>
-          </body>
-        </html>
-      `);
+      return res.status(403).send("Acesso negado: utilize Linkvertise ou Work.ink.");
     }
 
     if (!hwid) {
@@ -108,6 +101,18 @@ app.get("/check/:key", (req, res) => {
   }
 
   return res.send("USED_BY_OTHER");
+});
+
+app.get("/keys", (req, res) => {
+  const auth = req.query.auth;
+  if (auth !== "SENHA123") return res.status(403).send("Acesso negado.");
+
+  try {
+    const data = JSON.parse(fs.readFileSync(DATA_FILE));
+    res.json(data);
+  } catch (err) {
+    res.status(500).send("Erro ao ler o arquivo de keys.");
+  }
 });
 
 app.listen(3000, () => {
