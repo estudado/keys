@@ -19,7 +19,7 @@ function gerarKey() {
 
 app.get("/admin", (req, res) => {
   const auth = req.query.auth;
-  if (auth !== "SENHA123") return res.status(403).send("Acesso negado.");
+  if (auth !== "Spark") return res.status(403).send("Acesso negado.");
 
   res.send(`
     <html>
