@@ -14,6 +14,12 @@ function gerarKey() {
   return key;
 }
 
+app.get("/go", (req, res) => {
+  const hwid = req.query.hwid;
+  if (!hwid) return res.status(400).send("HWID ausente.");
+  res.redirect(`/?src=linkvertise&hwid=${encodeURIComponent(hwid)}`);
+});
+
 app.get("/", (req, res) => {
   try {
     const referer = req.headers.referer || "";
