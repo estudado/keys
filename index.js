@@ -15,33 +15,43 @@ function gerarKey() {
 }
 
 app.get("/", (req, res) => {
-  const referer = req.headers.referer || "";
-  if (!referer || (!referer.includes("linkvertise.com") && !referer.includes("loot-link.com"))) {
-    return res.status(403).send(`
+  try {
+    const referer = req.headers.referer || "";
+    const src = req.query.src || "";
+
+    const isFromLinkvertise = referer.includes("linkvertise.com");
+    const isFromLootlabs = referer.includes("loot-link.com") || src === "lootlabs";
+
+    if (!isFromLinkvertise && !isFromLootlabs) {
+      return res.status(403).send(`
+        <html>
+          <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
+            <h1>Acesso Negado</h1>
+            <p>Você precisa acessar este link através do Linkvertise ou LootLabs.</p>
+          </body>
+        </html>
+      `);
+    }
+
+    const newKey = gerarKey();
+    const data = JSON.parse(fs.readFileSync(DATA_FILE));
+    data.push({ key: newKey, hwid: null, usedAt: null });
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+
+    res.send(`
       <html>
+        <head><title>Sua Key</title></head>
         <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
-          <h1>Acesso Negado</h1>
-          <p>Você precisa acessar este link através do Linkvertise.</p>
+          <h1>Sua key exclusiva:</h1>
+          <p style="font-size:22px;font-weight:bold;font-family:monospace">${newKey}</p>
+          <p>Use no seu programa. A key é válida por 24h após o primeiro uso e apenas em 1 computador.</p>
         </body>
       </html>
     `);
+  } catch (err) {
+    console.error("Erro na rota /:", err);
+    res.status(500).send("Erro interno no servidor.");
   }
-
-  const newKey = gerarKey();
-  const data = JSON.parse(fs.readFileSync(DATA_FILE));
-  data.push({ key: newKey, hwid: null, usedAt: null });
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-
-  res.send(`
-    <html>
-      <head><title>Sua Key</title></head>
-      <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
-        <h1>Sua key exclusiva:</h1>
-        <p style="font-size:22px;font-weight:bold;font-family:monospace">${newKey}</p>
-        <p>Use no seu programa. A key é válida por 24h após o primeiro uso e apenas em 1 computador.</p>
-      </body>
-    </html>
-  `);
 });
 
 app.get("/check/:key", (req, res) => {
