@@ -16,8 +16,9 @@ function gerarKey() {
 
 app.get("/go", (req, res) => {
   const hwid = req.query.hwid;
+  const src = req.query.src || "linkvertise"; // fallback padrão
   if (!hwid) return res.status(400).send("HWID ausente.");
-  res.redirect(`/?src=linkvertise&hwid=${encodeURIComponent(hwid)}`);
+  res.redirect(`/?src=${encodeURIComponent(src)}&hwid=${encodeURIComponent(hwid)}`);
 });
 
 app.get("/", (req, res) => {
@@ -27,14 +28,14 @@ app.get("/", (req, res) => {
     const hwid = (req.query.hwid || "").trim();
 
     const isFromLinkvertise = referer.includes("linkvertise.com") || src === "linkvertise";
-    const isFromLootlabs = referer.includes("loot-link.com") || src === "lootlabs";
+    const isFromWorkInk = referer.includes("work.ink") || src === "workink";
 
-    if (!isFromLinkvertise && !isFromLootlabs) {
+    if (!isFromLinkvertise && !isFromWorkInk) {
       return res.status(403).send(`
         <html>
           <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
             <h1>Acesso Negado</h1>
-            <p>Você precisa acessar este link através do Linkvertise ou LootLabs.</p>
+            <p>Você precisa acessar este link através do Linkvertise ou Work.ink.</p>
           </body>
         </html>
       `);
