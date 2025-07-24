@@ -16,7 +16,7 @@ function gerarKey() {
 
 app.get("/", (req, res) => {
   const referer = req.headers.referer || "";
-  if (!referer.includes("linkvertise.com")) {
+  if (!referer || (!referer.includes("linkvertise.com") && !referer.includes("loot-link.com"))) {
     return res.status(403).send(`
       <html>
         <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
