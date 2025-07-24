@@ -105,7 +105,7 @@ app.get("/check/:key", (req, res) => {
 
 app.get("/keys", (req, res) => {
   const auth = req.query.auth;
-  if (auth !== "SENHA123") return res.status(403).send("Acesso negado.");
+  if (auth !== "Spark") return res.status(403).send("Acesso negado.");
 
   try {
     const data = JSON.parse(fs.readFileSync(DATA_FILE));
