@@ -19,44 +19,60 @@ function gerarKey() {
 
 app.get("/admin", (req, res) => {
   const auth = req.query.auth;
-  if (auth !== "Spark") return res.status(403).send("Acesso negado.");
-
-  res.send(`
-    <html>
-      <head><title>Painel de Admin</title></head>
-      <body style="font-family:sans-serif; padding:40px;">
-        <h2>Gerar Key Manualmente</h2>
-        <form method="POST" action="/admin/create?auth=${auth}">
-          <label>HWID:</label><br/>
-          <input type="text" name="hwid" required style="width:300px"/><br/><br/>
-          <button type="submit">Criar Key</button>
-        </form>
-      </body>
-    </html>
-  `);
-});
-
-app.post("/admin/create", (req, res) => {
-  const auth = req.query.auth;
-  if (auth !== "Spark") return res.status(403).send("Acesso negado.");
-
-  const hwid = (req.body.hwid || "").trim();
-  if (!hwid) return res.status(400).send("HWID inválido.");
+  if (auth !== "SENHA123") return res.status(403).send("Acesso negado.");
 
   const data = JSON.parse(fs.readFileSync(DATA_FILE));
-  const newKey = gerarKey();
-  const now = Date.now();
+  const verificada = req.query.keyverificada;
+  const resultadoVerificacao = verificada
+    ? data.find(k => k.key === verificada)
+      ? "✅ Key encontrada."
+      : "❌ Key não encontrada."
+    : "";
 
-  data.push({ key: newKey, hwid: hwid, usedAt: null, generatedAt: now });
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  const rows = data
+    .map(k => `
+      <tr>
+        <td>${k.key}</td>
+        <td>${k.hwid}</td>
+        <td>${k.generatedAt ? new Date(k.generatedAt).toLocaleString() : "-"}</td>
+        <td>${k.usedAt ? new Date(k.usedAt).toLocaleString() : "-"}</td>
+      </tr>
+    `)
+    .join("");
 
   res.send(`
     <html>
-      <body style="font-family:sans-serif; padding:40px;">
-        <h2>Key criada com sucesso:</h2>
-        <p><strong>${newKey}</strong></p>
-        <p>Associada ao HWID: ${hwid}</p>
-        <a href="/admin?auth=${auth}">Voltar</a>
+      <head>
+        <title>Admin - Painel de Keys</title>
+        <style>
+          body { font-family:sans-serif; padding:30px; }
+          table { border-collapse: collapse; width: 100%; }
+          th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+          th { background-color: #f2f2f2; }
+          input[type=text] { width: 400px; padding: 6px; }
+        </style>
+      </head>
+      <body>
+        <h2>Painel de Admin</h2>
+
+        <form method="GET" action="/admin">
+          <input type="hidden" name="auth" value="${auth}"/>
+          <label>Verificar se a key existe:</label><br/>
+          <input type="text" name="keyverificada" required />
+          <button type="submit">Verificar</button>
+        </form>
+        <p><strong>${resultadoVerificacao}</strong></p>
+
+        <h3>Lista de todas as keys</h3>
+        <table>
+          <tr>
+            <th>Key</th>
+            <th>HWID</th>
+            <th>Gerada em</th>
+            <th>Usada em</th>
+          </tr>
+          ${rows}
+        </table>
       </body>
     </html>
   `);
