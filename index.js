@@ -63,6 +63,14 @@ app.get("/admin", (req, res) => {
         </form>
         <p><strong>${resultadoVerificacao}</strong></p>
 
+        <hr/>
+
+        <form method="POST" action="/admin/create?auth=${auth}">
+          <label>Gerar key manual para HWID:</label><br/>
+          <input type="text" name="hwid" required />
+          <button type="submit">Criar Key</button>
+        </form>
+
         <h3>Lista de todas as keys</h3>
         <table>
           <tr>
@@ -76,6 +84,23 @@ app.get("/admin", (req, res) => {
       </body>
     </html>
   `);
+});
+
+app.post("/admin/create", (req, res) => {
+  const auth = req.query.auth;
+  if (auth !== "SENHA123") return res.status(403).send("Acesso negado.");
+
+  const hwid = (req.body.hwid || "").trim();
+  if (!hwid) return res.status(400).send("HWID inválido.");
+
+  const data = JSON.parse(fs.readFileSync(DATA_FILE));
+  const newKey = gerarKey();
+  const now = Date.now();
+
+  data.push({ key: newKey, hwid: hwid, usedAt: null, generatedAt: now });
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+
+  res.redirect(`/admin?auth=${auth}`);
 });
 
 app.listen(3000, () => {
