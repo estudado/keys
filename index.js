@@ -34,6 +34,19 @@ function limparTokensExpirados() {
   }
 }
 
+// Página inicial (GET /)
+app.get("/", (req, res) => {
+  res.send(`
+    <html>
+      <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
+        <h1>🔐 Sistema de Geração de Keys</h1>
+        <p>Para começar, acesse <code>/go?hwid=SEU_HWID</code></p>
+      </body>
+    </html>
+  `);
+});
+
+// Fluxo inicial (GET /go)
 app.get("/go", (req, res) => {
   limparTokensExpirados();
 
@@ -48,8 +61,8 @@ app.get("/go", (req, res) => {
   tokenMap[token] = { hwid, timestamp: Date.now(), redirOk: false, ip: clientIp, visitTime: null, code };
 
   const encurtador = src === "workink"
-    ? `https://workink.net/221q/r3wvdu1w?code=${code}` // Adiciona o código ao encurtador
-    : `https://link-hub.net/1374242/xChXAM3IRghL?code=${code}`; // Adiciona o código ao encurtador
+    ? `https://workink.net/221q/r3wvdu1w?code=${code}`
+    : `https://link-hub.net/1374242/xChXAM3IRghL?code=${code}`;
 
   res.send(`
     <html>
@@ -73,7 +86,7 @@ app.get("/go", (req, res) => {
   `);
 });
 
-// Rota intermediária para redirecionar ao encurtador
+// Redirecionamento do encurtador
 app.get("/redir", (req, res) => {
   const token = req.query.token;
   const src = req.query.src || "linkvertise";
@@ -81,12 +94,11 @@ app.get("/redir", (req, res) => {
 
   if (!tokenMap[token]) return res.status(400).send("Token inválido.");
 
-  // Marca que o usuário passou pela rota de redirecionamento
   tokenMap[token].redirOk = true;
-  tokenMap[token].visitTime = Date.now(); // Registra o momento de visita
-  tokenMap[token].ip = clientIp; // Atualiza o IP
+  tokenMap[token].visitTime = Date.now();
+  tokenMap[token].ip = clientIp;
 
-  const code = tokenMap[token].code; // Recupera o código associado ao token
+  const code = tokenMap[token].code;
   const encurtador = src === "workink"
     ? `https://workink.net/221q/r3wvdu1w?code=${code}`
     : `https://link-hub.net/1374242/xChXAM3IRghL?code=${code}`;
@@ -94,7 +106,20 @@ app.get("/redir", (req, res) => {
   res.redirect(encurtador);
 });
 
-// Rota para validar o código do encurtador
+// [NOVO] Suporte a GET /submit-code para redirecionamentos inválidos
+app.get("/submit-code", (req, res) => {
+  res.send(`
+    <html>
+      <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
+        <h1>⚠️ Acesso inválido</h1>
+        <p>Você foi redirecionado de forma incorreta.</p>
+        <p>Volte para <code>/go?hwid=SEU_HWID</code> e siga os passos corretamente.</p>
+      </body>
+    </html>
+  `);
+});
+
+// Validação do código (POST)
 app.post("/submit-code", (req, res) => {
   const incomingToken = req.body.token;
   const submittedCode = req.body.code;
@@ -105,20 +130,14 @@ app.post("/submit-code", (req, res) => {
   }
 
   const tokenData = tokenMap[incomingToken];
-
-  // Verifica se o token já foi validado
   if (!tokenData.redirOk) {
     return res.status(403).send("Você precisa passar pelo encurtador antes de enviar o código.");
   }
-
-  // Verifica o IP do usuário
   if (tokenData.ip !== clientIp) {
     return res.status(403).send("O IP atual não corresponde ao IP registrado durante o redirecionamento.");
   }
-
-  // Verifica se o código enviado corresponde ao código gerado
   if (tokenData.code !== submittedCode) {
-    return res.status(403).send("Código incorreto. Certifique-se de concluir o encurtador e copiar o código correto.");
+    return res.status(403).send("Código incorreto. Certifique-se de concluir o encurtador e copiar o código corretamente.");
   }
 
   res.send(`
@@ -134,7 +153,7 @@ app.post("/submit-code", (req, res) => {
   `);
 });
 
-// Rota para gerar a key
+// Geração da key
 app.get("/getkey", (req, res) => {
   try {
     limparTokensExpirados();
@@ -152,8 +171,6 @@ app.get("/getkey", (req, res) => {
     }
 
     const tokenData = tokenMap[incomingToken];
-
-    // Verifica se o código foi validado
     if (!tokenData.redirOk || !tokenData.code) {
       return res.status(403).send("Código não validado. Você precisa concluir o encurtador e validar o código.");
     }
@@ -180,8 +197,6 @@ app.get("/getkey", (req, res) => {
     const novaKey = gerarKey();
     data.push({ key: novaKey, hwid, usedAt: null, generatedAt: now });
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-
-    // Remove o token após gerar
     delete tokenMap[incomingToken];
 
     res.send(`
