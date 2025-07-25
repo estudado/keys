@@ -97,7 +97,7 @@ app.get("/", (req, res) => {
     const isFromLinkvertise = referer.includes("linkvertise.com") || src === "linkvertise";
     const isFromWorkInk = referer.includes("work.ink") || src === "workink";
 
-    if (!isFromLinkvertise && !isFromWorkInk && !token) {
+    if (!isFromLinkvertise && !isFromWorkInk && !incomingToken) {
       return res.status(403).send("Acesso negado: utilize Linkvertise ou Work.ink.");
     }
 
