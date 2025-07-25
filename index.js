@@ -1,14 +1,15 @@
 const express = require("express");
 const fs = require("fs");
-const app = express();
 const crypto = require("crypto");
-const tokenMap = {};
+const app = express();
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 const DATA_FILE = "keys.json";
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, "[]");
+
+const tokenMap = {}; // { token: { hwid, timestamp } }
 
 function gerarKey() {
   const caracteres = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -19,15 +20,10 @@ function gerarKey() {
   return key;
 }
 
-// ROTA /go
+// ROTA /go → recebe hwid, gera token e redireciona para link encurtado com token
 app.get("/go", (req, res) => {
-  const token = req.query.token;
-if (token && tokenMap[token]) {
-  req.query.hwid = tokenMap[token].hwid;
-}
   const hwid = req.query.hwid;
   const src = req.query.src || "linkvertise";
-
   if (!hwid) return res.status(400).send("HWID ausente.");
 
   const token = crypto.randomUUID();
@@ -48,6 +44,11 @@ if (token && tokenMap[token]) {
 // ROTA PRINCIPAL /
 app.get("/", (req, res) => {
   try {
+    const token = req.query.token;
+    if (token && tokenMap[token]) {
+      req.query.hwid = tokenMap[token].hwid;
+    }
+
     const referer = req.headers.referer || "";
     const src = req.query.src || "";
     const hwid = (req.query.hwid || "").trim();
@@ -55,7 +56,7 @@ app.get("/", (req, res) => {
     const isFromLinkvertise = referer.includes("linkvertise.com") || src === "linkvertise";
     const isFromWorkInk = referer.includes("work.ink") || src === "workink";
 
-    if (!isFromLinkvertise && !isFromWorkInk) {
+    if (!isFromLinkvertise && !isFromWorkInk && !token) {
       return res.status(403).send("Acesso negado: utilize Linkvertise ou Work.ink.");
     }
 
@@ -101,12 +102,10 @@ app.get("/", (req, res) => {
 app.get("/check/:key", (req, res) => {
   const key = req.params.key.trim().toLowerCase();
   const hwid = (req.query.hwid || "").trim();
-
   if (!key || !hwid) return res.send("MISSING");
 
   let data = JSON.parse(fs.readFileSync(DATA_FILE));
   const entry = data.find(k => k.key === key);
-
   if (!entry) return res.send("INVALID");
 
   const now = Date.now();
@@ -133,7 +132,7 @@ app.get("/check/:key", (req, res) => {
   return res.send("USED_BY_OTHER");
 });
 
-// PAINEL /admin
+// ROTA /admin
 app.get("/admin", (req, res) => {
   const auth = req.query.auth;
   if (auth !== "SENHA123") return res.status(403).send("Acesso negado.");
