@@ -39,17 +39,18 @@ app.get("/", (_req, res) => {
   res.send("Sistema de Keys: Utilize /go?hwid=SEU_HWID ou /validate");
 });
 
-// Rota validate externa
+// Rota validate (via work.ink)
 app.get("/validate", async (req, res) => {
   const { hash, hwid } = req.query;
   if (!hash || !hwid) return res.status(400).send("MISSING");
   try {
     const resp = await axios.get(`https://work.ink/_api/v2/token/isValid/${hash}?deleteToken=1`);
     if (!resp.data.valid) return res.send("INVALID");
+
     const keys = JSON.parse(fs.readFileSync(DATA_FILE));
-    let entry = keys.find(k => k.hwid === hwid);
+    let entry = keys.find(k => k.hwid === hwid && !k.consumed);
     if (!entry) {
-      entry = { hwid, key: gerarKey(), timestamp: Date.now() };
+      entry = { hwid, key: gerarKey(), timestamp: Date.now(), consumed: false };
       keys.push(entry);
       fs.writeFileSync(DATA_FILE, JSON.stringify(keys, null, 2));
     }
