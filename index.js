@@ -146,6 +146,21 @@ app.get("/go", async (req, res) => {
   `);
 });
 
+// rota exemplo no Express
+app.get('/validate', async (req, res) => {
+  const { hash, hwid } = req.query;
+  if (!hash || !hwid) return res.status(400).send('Missing');
+
+  // verificar token no Work.ink:
+  const resp = await axios.get(`https://work.ink/_api/v2/token/isValid/${hash}`);
+  if (resp.data.valid) {
+    // prossegue gerar key ou verificar hwid etc.
+    res.send('VALID');
+  } else {
+    res.send('INVALID');
+  }
+});
+
 // As demais rotas permanecem inalteradas...
 
 const PORT = process.env.PORT || 3000;
