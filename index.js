@@ -2,6 +2,7 @@ const express = require("express");
 const fs = require("fs");
 const session = require("express-session");
 const axios = require("axios");
+
 const app = express();
 
 // --- CONFIGURAÇÕES ---
@@ -17,7 +18,7 @@ app.use(session({
   cookie: {
     path: "/",
     httpOnly: true,
-    secure: false, // Mude para true se usar HTTPS (recomendado)
+    secure: process.env.NODE_ENV === 'production', // Use cookies seguros em produção (HTTPS)
     maxAge: 60 * 60 * 1000, // 1 hora de sessão admin
     sameSite: "lax",
   }
@@ -26,53 +27,48 @@ app.use(session({
 // --- CONSTANTES E INICIALIZAÇÃO ---
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 const DATA_FILE = "keys.json";
-const VALIDITY_DURATION = 24 * 60 * 60 * 1000; // 24 horas de validade da chave
+const VALIDITY_DURATION = 24 * 60 * 60 * 1000; // 24 horas
 
-// Garante que o arquivo de chaves exista
+// Garante que o arquivo de chaves exista na inicialização
 if (!fs.existsSync(DATA_FILE)) {
   fs.writeFileSync(DATA_FILE, JSON.stringify([]));
 }
 
 // --- FUNÇÕES AUXILIARES ---
 function getKeys() {
-  return JSON.parse(fs.readFileSync(DATA_FILE));
+  try {
+    return JSON.parse(fs.readFileSync(DATA_FILE));
+  } catch (error) {
+    console.error("Erro ao ler o arquivo de chaves:", error);
+    return []; // Retorna um array vazio em caso de erro
+  }
 }
 
 function saveKeys(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
-// --- ROTAS DA API DE CHAVES ---
+// --- ROTAS DA API ---
 
-/**
- * ROTA: Transforma o token do Work.ink em uma chave final para o usuário.
- * A chave é criada sem HWID neste momento.
- */
+// Valida token do Work.ink e cria a chave
 app.get("/validate", async (req, res) => {
   const { hash } = req.query;
-  if (!hash) {
-    return res.status(400).send("MISSING_HASH");
-  }
+  if (!hash) return res.status(400).send("MISSING_HASH");
 
   try {
-    // Valida o token no Work.ink e solicita que ele seja deletado após o uso
     const response = await axios.get(`https://work.ink/_api/v2/token/isValid/${hash}?deleteToken=1`);
-    if (!response.data.valid) {
+    if (!response.data || !response.data.valid) {
       return res.status(401).send("INVALID_TOKEN");
     }
 
     const keys = getKeys();
-    const keyExists = keys.find(k => k.key === hash);
-
-    // Se a chave já foi gerada, apenas a retorna para o usuário
-    if (keyExists) {
-      return res.send(keyExists.key);
+    if (keys.find(k => k.key === hash)) {
+      return res.send(hash);
     }
 
-    // Cria a nova entrada de chave, ainda sem HWID
     const newKeyEntry = {
-      key: hash, // O token do Work.ink se torna a chave final
-      hwid: null, // O HWID será vinculado no primeiro uso
+      key: hash,
+      hwid: null,
       activatedAt: null,
       createdAt: Date.now(),
       permanente: false,
@@ -80,7 +76,6 @@ app.get("/validate", async (req, res) => {
 
     keys.push(newKeyEntry);
     saveKeys(keys);
-
     return res.send(newKeyEntry.key);
 
   } catch (error) {
@@ -89,56 +84,39 @@ app.get("/validate", async (req, res) => {
   }
 });
 
-/**
- * ROTA: Valida a chave no executor e vincula o HWID no primeiro uso.
- * Esta é a principal rota de verificação.
- */
+// Verifica a chave e vincula o HWID no primeiro uso
 app.get("/check", (req, res) => {
   const { key, hwid } = req.query;
-  if (!key || !hwid) {
-    return res.status(400).send("MISSING_PARAMS");
-  }
+  if (!key || !hwid) return res.status(400).send("MISSING_PARAMS");
 
   const keys = getKeys();
   const keyEntry = keys.find(k => k.key === key);
 
-  if (!keyEntry) {
-    return res.status(404).send("INVALID_KEY");
-  }
+  if (!keyEntry) return res.status(404).send("INVALID_KEY");
 
-  // Lógica de vinculação: Se a chave ainda não tem HWID, vincula agora.
   if (!keyEntry.hwid) {
     keyEntry.hwid = hwid;
-    keyEntry.activatedAt = Date.now(); // O tempo de validade começa a contar agora
+    keyEntry.activatedAt = Date.now();
     saveKeys(keys);
     console.log(`Chave ${key} vinculada ao HWID ${hwid}`);
-    return res.send("VALID"); // Retorna válido no primeiro uso
+    return res.send("VALID");
   }
 
-  // Verificação de segurança: A chave já está vinculada a um HWID diferente?
-  if (keyEntry.hwid !== hwid) {
-    return res.status(403).send("HWID_MISMATCH");
-  }
+  if (keyEntry.hwid !== hwid) return res.status(403).send("HWID_MISMATCH");
 
-  // Verificação de expiração (ignora se for uma chave permanente)
-  if (!keyEntry.permanente && Date.now() - keyEntry.activatedAt > VALIDITY_DURATION) {
+  if (!keyEntry.permanente && (Date.now() - keyEntry.activatedAt > VALIDITY_DURATION)) {
     return res.status(403).send("EXPIRED_KEY");
   }
 
-  // Se todas as verificações passaram, a chave é válida
   return res.send("VALID");
 });
 
-
-// --- ROTAS DO PAINEL DE ADMINISTRAÇÃO ---
+// --- ROTAS DO PAINEL ADMIN ---
 
 app.get("/admin", (req, res) => {
-  if (req.session.loggedIn) {
-    return res.redirect("/admin/dashboard");
-  }
-  // Página de login simples
+  if (req.session.loggedIn) return res.redirect("/admin/dashboard");
   res.send(`
-    <style>body { font-family: sans-serif; background-color: #f4f4f4; display: flex; justify-content: center; align-items: center; height: 100vh; } form { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); } input { display: block; margin-bottom: 1rem; padding: 0.5rem; width: 200px; } button { padding: 0.5rem 1rem; cursor: pointer; }</style>
+    <style>body { font-family: sans-serif; background-color: #f4f4f4; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; } form { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); } input { display: block; margin-bottom: 1rem; padding: 0.5rem; width: 200px; } button { padding: 0.5rem 1rem; cursor: pointer; }</style>
     <form method="POST" action="/admin/login">
       <h2>Login Admin</h2>
       <input type="password" name="senha" placeholder="Senha" required/>
@@ -156,9 +134,7 @@ app.post("/admin/login", (req, res) => {
 });
 
 app.get("/admin/dashboard", (req, res) => {
-  if (!req.session.loggedIn) {
-    return res.redirect("/admin");
-  }
+  if (!req.session.loggedIn) return res.redirect("/admin");
   const keys = getKeys();
   const keyListHtml = keys.map(k =>
     `<tr>
@@ -170,13 +146,13 @@ app.get("/admin/dashboard", (req, res) => {
   ).join("");
 
   res.send(`
-    <style>body{font-family:sans-serif;margin:2rem} table{width:100%;border-collapse:collapse} th,td{border:1px solid #ddd;padding:8px;text-align:left} th{background-color:#f2f2f2}</style>
+    <style>body{font-family:sans-serif;margin:2rem} table{width:100%;border-collapse:collapse} th,td{border:1px solid #ddd;padding:8px;text-align:left} th{background-color:#f2f2f2} form{margin-top:2rem}</style>
     <h1>Painel de Chaves</h1>
+    <a href="/admin/logout">Sair</a>
     <table>
       <thead><tr><th>Chave</th><th>HWID Vinculado</th><th>Ativada em</th><th>Permanente</th></tr></thead>
       <tbody>${keyListHtml}</tbody>
     </table>
-    <hr>
     <h2>Deletar Chave</h2>
     <form method="POST" action="/admin/delete">
       <input name="key" placeholder="Key para deletar" required style="padding: 0.5rem; width: 300px;"/>
@@ -186,9 +162,7 @@ app.get("/admin/dashboard", (req, res) => {
 });
 
 app.post("/admin/delete", (req, res) => {
-  if (!req.session.loggedIn) {
-    return res.status(403).redirect("/admin");
-  }
+  if (!req.session.loggedIn) return res.status(403).redirect("/admin");
   const { key } = req.body;
   let keys = getKeys();
   const initialLength = keys.length;
@@ -198,7 +172,6 @@ app.post("/admin/delete", (req, res) => {
     saveKeys(keys);
     console.log(`Chave ${key} deletada pelo admin.`);
   }
-  
   return res.redirect("/admin/dashboard");
 });
 
@@ -216,4 +189,4 @@ app.get("/admin/logout", (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Servidor rodando na porta ${PORT}`);
-});```
+});
