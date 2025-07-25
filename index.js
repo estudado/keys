@@ -134,7 +134,6 @@ app.post("/admin/delete", (req, res) => {
 });
 
 // Executor verifica key
-const VALIDITY_DURATION = 24 * 60 * 60 * 1000; // 24 horas
 
 app.get('/admin/check/:key', (req, res) => {
   const { key } = req.params;
