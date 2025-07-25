@@ -213,6 +213,71 @@ app.post("/admin/login", (req, res) => {
   res.send("Senha incorreta.");
 });
 
+app.get("/admin/dashboard", (req, res) => {
+  if (!req.session.loggedIn) return res.redirect("/admin");
+
+  const keysData = JSON.parse(fs.readFileSync(DATA_FILE));
+  const lista = keysData.map(k => `<li><b>${k.hwid}</b>: ${k.key} ${k.permanente ? '(PERM)' : ''}</li>`).join("");
+
+  res.send(`
+    <h1>Admin - Keys</h1>
+    <ul>${lista}</ul>
+
+    <hr/>
+    <form method="POST" action="/admin/create" style="margin-bottom:20px">
+      <input name="hwid" placeholder="HWID" required />
+      <button type="submit">Criar Key Normal</button>
+    </form>
+
+    <form method="POST" action="/admin/create-perm">
+      <input name="hwid" placeholder="HWID" required />
+      <button type="submit">Criar Key PERM</button>
+    </form>
+
+    <form method="POST" action="/admin/delete" style="margin-top:30px">
+      <input name="hwid" placeholder="HWID a deletar" required />
+      <button type="submit">Deletar Key</button>
+    </form>
+  `);
+});
+
+app.post("/admin/create", (req, res) => {
+  if (!req.session.loggedIn) return res.redirect("/admin");
+
+  const { hwid } = req.body;
+  const keysData = JSON.parse(fs.readFileSync(DATA_FILE));
+  if (keysData.find(k => k.hwid === hwid)) return res.send("HWID já possui key.");
+
+  const nova = { hwid, key: gerarKey(), timestamp: Date.now() };
+  keysData.push(nova);
+  fs.writeFileSync(DATA_FILE, JSON.stringify(keysData, null, 2));
+  res.redirect("/admin/dashboard");
+});
+
+app.post("/admin/create-perm", (req, res) => {
+  if (!req.session.loggedIn) return res.redirect("/admin");
+
+  const { hwid } = req.body;
+  const keysData = JSON.parse(fs.readFileSync(DATA_FILE));
+  if (keysData.find(k => k.hwid === hwid)) return res.send("HWID já possui key.");
+
+  const nova = { hwid, key: gerarKey(), permanente: true, timestamp: Date.now() };
+  keysData.push(nova);
+  fs.writeFileSync(DATA_FILE, JSON.stringify(keysData, null, 2));
+  res.redirect("/admin/dashboard");
+});
+
+app.post("/admin/delete", (req, res) => {
+  if (!req.session.loggedIn) return res.redirect("/admin");
+
+  const { hwid } = req.body;
+  let keysData = JSON.parse(fs.readFileSync(DATA_FILE));
+  keysData = keysData.filter(k => k.hwid !== hwid);
+  fs.writeFileSync(DATA_FILE, JSON.stringify(keysData, null, 2));
+  res.redirect("/admin/dashboard");
+});
+
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
