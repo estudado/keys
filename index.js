@@ -24,21 +24,39 @@ function gerarKey() {
 app.get("/go", (req, res) => {
   const hwid = req.query.hwid;
   const src = req.query.src || "linkvertise";
+
   if (!hwid) return res.status(400).send("HWID ausente.");
 
   const token = crypto.randomUUID();
   tokenMap[token] = { hwid, timestamp: Date.now() };
 
-  let redirectUrl = "";
+  let encurtador = "";
   if (src === "linkvertise") {
-    redirectUrl = `https://link-hub.net/1374242/xChXAM3IRghL?token=${token}`;
+    encurtador = "https://link-hub.net/1374242/xChXAM3IRghL";
   } else if (src === "workink") {
-    redirectUrl = `https://workink.net/221q/r3wvdu1w?token=${token}`;
+    encurtador = "https://workink.net/221q/r3wvdu1w";
   } else {
     return res.status(400).send("Fonte inválida.");
   }
 
-  res.redirect(redirectUrl);
+  // Redireciona com instrução + token visível
+  res.send(`
+    <html>
+      <head><title>Geração de Key</title></head>
+      <body style="font-family:sans-serif;text-align:center;padding-top:80px;">
+        <h2>1º Passo:</h2>
+        <p>Conclua o encurtador abaixo para gerar sua key:</p>
+        <a href="${encurtador}" target="_blank">
+          <button style="font-size:18px;padding:10px 30px;">Abrir Link (${src})</button>
+        </a>
+        <h2>2º Passo:</h2>
+        <p>Depois de terminar o encurtador, clique abaixo:</p>
+        <a href="/?token=${token}">
+          <button style="font-size:18px;padding:10px 30px;">Gerar Key</button>
+        </a>
+      </body>
+    </html>
+  `);
 });
 
 // ROTA PRINCIPAL /
