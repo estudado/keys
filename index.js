@@ -9,7 +9,7 @@ app.use(express.json());
 const DATA_FILE = "keys.json";
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, "[]");
 
-const tokenMap = {}; // { token: { hwid, timestamp } }
+const tokenMap = {}; // { token: { hwid, timestamp, redirOk } }
 
 function gerarKey() {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -35,11 +35,7 @@ app.get("/go", (req, res) => {
   if (!hwid) return res.status(400).send("HWID ausente.");
 
   const token = crypto.randomUUID();
-  tokenMap[token] = { hwid, timestamp: Date.now() };
-
-  const encurtador = src === "workink"
-    ? "https://workink.net/221q/r3wvdu1w"
-    : "https://link-hub.net/1374242/xChXAM3IRghL";
+  tokenMap[token] = { hwid, timestamp: Date.now(), redirOk: false };
 
   res.send(`
     <html>
@@ -47,7 +43,7 @@ app.get("/go", (req, res) => {
       <body style="font-family:sans-serif;text-align:center;padding-top:60px;">
         <h2>Passo 1</h2>
         <p>Clique abaixo para abrir o encurtador:</p>
-        <a href="${encurtador}" target="_blank">
+        <a href="/redir?token=${token}&src=${src}" target="_blank">
           <button style="font-size:18px;padding:10px 30px;margin:10px;">Abrir Link (${src})</button>
         </a>
         <hr style="margin: 40px 0;" />
@@ -61,6 +57,21 @@ app.get("/go", (req, res) => {
   `);
 });
 
+app.get("/redir", (req, res) => {
+  const token = req.query.token;
+  const src = req.query.src || "linkvertise";
+  if (!tokenMap[token]) return res.status(400).send("Token inválido.");
+
+  // Marca que o usuário passou pelo redirecionador
+  tokenMap[token].redirOk = true;
+
+  const encurtador = src === "workink"
+    ? "https://workink.net/221q/r3wvdu1w"
+    : "https://link-hub.net/1374242/xChXAM3IRghL";
+
+  res.redirect(encurtador);
+});
+
 app.get("/getkey", (req, res) => {
   try {
     limparTokensExpirados();
@@ -71,6 +82,16 @@ app.get("/getkey", (req, res) => {
         <html><body style="font-family:sans-serif;text-align:center;padding-top:100px;">
         <h1>❌ Acesso negado</h1>
         <p>Token inválido ou expirado. Você deve passar pelo encurtador antes de gerar a key.</p>
+        </body></html>
+      `);
+    }
+
+    // Checa se o usuário de fato passou pelo redirecionador (e portanto, pelo menos tentou acessar o encurtador)
+    if (!tokenMap[incomingToken].redirOk) {
+      return res.status(403).send(`
+        <html><body style="font-family:sans-serif;text-align:center;padding-top:100px;">
+        <h1>❌ Acesso negado</h1>
+        <p>Você precisa passar pelo encurtador antes de gerar a key.</p>
         </body></html>
       `);
     }
@@ -98,6 +119,7 @@ app.get("/getkey", (req, res) => {
     data.push({ key: novaKey, hwid, usedAt: null, generatedAt: now });
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 
+    // Remove o token após gerar
     delete tokenMap[incomingToken];
 
     res.send(`
