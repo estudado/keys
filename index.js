@@ -9,7 +9,7 @@ app.use(express.json());
 const DATA_FILE = "keys.json";
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, "[]");
 
-const tokenMap = {}; // { token: { hwid, timestamp, redirOk, ip, visitTime } }
+const tokenMap = {}; // { token: { hwid, timestamp, redirOk, ip, visitTime, proof } }
 
 function gerarKey() {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -31,13 +31,13 @@ app.get("/go", (req, res) => {
   limparTokensExpirados();
 
   const hwid = req.query.hwid;
-  const src = req.query.src || "linkvertise";
+  const src = req.query.src || "workink";
   if (!hwid) return res.status(400).send("HWID ausente.");
 
   const token = crypto.randomUUID();
   const clientIp = req.headers["x-forwarded-for"] || req.connection.remoteAddress;
 
-  tokenMap[token] = { hwid, timestamp: Date.now(), redirOk: false, ip: clientIp, visitTime: null };
+  tokenMap[token] = { hwid, timestamp: Date.now(), redirOk: false, ip: clientIp, visitTime: null, proof: null };
 
   const encurtador = src === "workink"
     ? "https://workink.net/221q/r3wvdu1w"
@@ -55,9 +55,11 @@ app.get("/go", (req, res) => {
         <hr style="margin: 40px 0;" />
         <h2>Passo 2</h2>
         <p>Depois de concluir o encurtador, clique abaixo:</p>
-        <a href="/getkey?token=${token}">
-          <button style="font-size:18px;padding:10px 30px;">Gerar Key</button>
-        </a>
+        <form method="POST" action="/submit-proof">
+          <input type="hidden" name="token" value="${token}" />
+          <input type="text" name="proof" placeholder="Insira o código do encurtador" required />
+          <button style="font-size:18px;padding:10px 30px;">Enviar Prova</button>
+        </form>
       </body>
     </html>
   `);
@@ -66,7 +68,7 @@ app.get("/go", (req, res) => {
 // Rota intermediária para redirecionar ao encurtador
 app.get("/redir", (req, res) => {
   const token = req.query.token;
-  const src = req.query.src || "linkvertise";
+  const src = req.query.src || "workink";
   const clientIp = req.headers["x-forwarded-for"] || req.connection.remoteAddress;
 
   if (!tokenMap[token]) return res.status(400).send("Token inválido.");
@@ -81,6 +83,43 @@ app.get("/redir", (req, res) => {
     : "https://link-hub.net/1374242/xChXAM3IRghL";
 
   res.redirect(encurtador);
+});
+
+// Rota para enviar a prova de conclusão
+app.post("/submit-proof", (req, res) => {
+  const incomingToken = req.body.token;
+  const proof = req.body.proof;
+  const clientIp = req.headers["x-forwarded-for"] || req.connection.remoteAddress;
+
+  if (!incomingToken || !tokenMap[incomingToken]) {
+    return res.status(403).send("Token inválido ou expirado.");
+  }
+
+  const tokenData = tokenMap[incomingToken];
+
+  // Verifica se o token já foi validado
+  if (!tokenData.redirOk) {
+    return res.status(403).send("Você precisa passar pelo encurtador antes de enviar a prova.");
+  }
+
+  // Verifica o IP do usuário
+  if (tokenData.ip !== clientIp) {
+    return res.status(403).send("O IP atual não corresponde ao IP registrado durante o redirecionamento.");
+  }
+
+  // Registra a prova de conclusão
+  tokenData.proof = proof;
+  res.send(`
+    <html>
+      <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
+        <h1>Prova registrada!</h1>
+        <p>Agora você pode gerar sua key.</p>
+        <a href="/getkey?token=${incomingToken}">
+          <button style="font-size:18px;padding:10px 30px;">Gerar Key</button>
+        </a>
+      </body>
+    </html>
+  `);
 });
 
 // Rota para gerar a key
@@ -102,35 +141,20 @@ app.get("/getkey", (req, res) => {
 
     const tokenData = tokenMap[incomingToken];
 
-    // Verifica se o usuário passou pelo redirecionador
-    if (!tokenData.redirOk || !tokenData.visitTime) {
-      return res.status(403).send(`
-        <html><body style="font-family:sans-serif;text-align:center;padding-top:100px;">
-        <h1>❌ Acesso negado</h1>
-        <p>Você precisa passar pelo encurtador antes de gerar a key.</p>
-        </body></html>
-      `);
+    // Verifica se a prova foi enviada
+    if (!tokenData.proof) {
+      return res.status(403).send("Você precisa enviar a prova de conclusão antes de gerar a key.");
     }
 
     // Verifica o tempo mínimo necessário para conclusão
     const tempoDecorrido = Date.now() - tokenData.visitTime;
-    if (tempoDecorrido < 30 * 1000) { // Exige ao menos 30 segundos
-      return res.status(403).send(`
-        <html><body style="font-family:sans-serif;text-align:center;padding-top:100px;">
-        <h1>❌ Acesso negado</h1>
-        <p>Você deve aguardar pelo menos 30 segundos após acessar o encurtador para gerar a key.</p>
-        </body></html>
-      `);
+    if (tempoDecorrido < 45 * 1000) { // Exige ao menos 45 segundos
+      return res.status(403).send("Você deve aguardar pelo menos 45 segundos após acessar o encurtador para gerar a key.");
     }
 
     // Verifica o IP do usuário
     if (tokenData.ip !== clientIp) {
-      return res.status(403).send(`
-        <html><body style="font-family:sans-serif;text-align:center;padding-top:100px;">
-        <h1>❌ Acesso negado</h1>
-        <p>O IP atual não corresponde ao IP registrado durante o redirecionamento. Acesso negado.</p>
-        </body></html>
-      `);
+      return res.status(403).send("O IP atual não corresponde ao IP registrado durante o redirecionamento.");
     }
 
     const hwid = tokenData.hwid;
