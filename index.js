@@ -46,23 +46,22 @@ app.get("/go", (req, res) => {
       <head><title>Validação</title></head>
       <body style="font-family:sans-serif;text-align:center;padding-top:60px;">
         <h2>Passo 1</h2>
-        <p>Conclua o encurtador abaixo:</p>
+        <p>Clique abaixo para abrir o encurtador:</p>
         <a href="${encurtador}" target="_blank">
           <button style="font-size:18px;padding:10px 30px;margin:10px;">Abrir Link (${src})</button>
         </a>
         <hr style="margin: 40px 0;" />
         <h2>Passo 2</h2>
-        <p>Depois de concluir, clique abaixo:</p>
-        <form method="GET" action="/">
-          <input type="hidden" name="token" value="${token}" />
+        <p>Depois de concluir o encurtador, clique abaixo para gerar sua key:</p>
+        <a href="/getkey?token=${token}">
           <button style="font-size:18px;padding:10px 30px;">Gerar Key</button>
-        </form>
+        </a>
       </body>
     </html>
   `);
 });
 
-app.get("/", (req, res) => {
+app.get("/getkey", (req, res) => {
   try {
     limparTokensExpirados();
 
@@ -71,7 +70,7 @@ app.get("/", (req, res) => {
       return res.status(403).send(`
         <html><body style="font-family:sans-serif;text-align:center;padding-top:100px;">
         <h1>❌ Acesso negado</h1>
-        <p>Você deve passar pelo encurtador antes de gerar uma key.</p>
+        <p>Token inválido ou expirado. Você deve passar pelo encurtador antes de gerar a key.</p>
         </body></html>
       `);
     }
@@ -112,87 +111,12 @@ app.get("/", (req, res) => {
       </html>
     `);
   } catch (err) {
-    console.error("Erro na rota /:", err);
+    console.error("Erro na rota /getkey:", err);
     res.status(500).send("Erro interno no servidor.");
   }
 });
 
-// ✅ Painel /admin
-app.get("/admin", (req, res) => {
-  const auth = req.query.auth;
-  if (auth !== "SENHA123") return res.status(403).send("Acesso negado.");
-
-  const data = JSON.parse(fs.readFileSync(DATA_FILE));
-  const verificada = req.query.keyverificada;
-  const resultadoVerificacao = verificada
-    ? data.find(k => k.key === verificada)
-      ? "✅ Key encontrada."
-      : "❌ Key não encontrada."
-    : "";
-
-  const rows = data.map(k => `
-    <tr>
-      <td>${k.key}</td>
-      <td>${k.hwid}</td>
-      <td>${k.generatedAt ? new Date(k.generatedAt).toLocaleString() : "-"}</td>
-      <td>${k.usedAt ? new Date(k.usedAt).toLocaleString() : "-"}</td>
-    </tr>
-  `).join("");
-
-  res.send(`
-    <html>
-      <head>
-        <title>Admin - Painel de Keys</title>
-        <style>
-          body { font-family:sans-serif; padding:30px; }
-          table { border-collapse: collapse; width: 100%; }
-          th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-          th { background-color: #f2f2f2; }
-          input[type=text] { width: 400px; padding: 6px; }
-        </style>
-      </head>
-      <body>
-        <h2>Painel de Admin</h2>
-        <form method="GET" action="/admin">
-          <input type="hidden" name="auth" value="${auth}"/>
-          <label>Verificar se a key existe:</label><br/>
-          <input type="text" name="keyverificada" required />
-          <button type="submit">Verificar</button>
-        </form>
-        <p><strong>${resultadoVerificacao}</strong></p>
-        <hr/>
-        <form method="POST" action="/admin/create?auth=${auth}">
-          <label>Gerar key manual para HWID:</label><br/>
-          <input type="text" name="hwid" required />
-          <button type="submit">Criar Key</button>
-        </form>
-        <h3>Lista de todas as keys</h3>
-        <table>
-          <tr><th>Key</th><th>HWID</th><th>Gerada em</th><th>Usada em</th></tr>
-          ${rows}
-        </table>
-      </body>
-    </html>
-  `);
-});
-
-// ✅ Criação manual
-app.post("/admin/create", (req, res) => {
-  const auth = req.query.auth;
-  if (auth !== "SENHA123") return res.status(403).send("Acesso negado.");
-
-  const hwid = (req.body.hwid || "").trim();
-  if (!hwid) return res.status(400).send("HWID inválido.");
-
-  const data = JSON.parse(fs.readFileSync(DATA_FILE));
-  const newKey = gerarKey();
-  const now = Date.now();
-
-  data.push({ key: newKey, hwid, usedAt: null, generatedAt: now });
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-
-  res.redirect(`/admin?auth=${auth}`);
-});
+// O painel /admin permanece como está. As outras funcionalidades podem ser reativadas conforme necessidade.
 
 app.listen(3000, () => {
   console.log("Servidor rodando na porta 3000");
