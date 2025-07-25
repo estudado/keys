@@ -12,103 +12,80 @@ if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, "[]");
 const tokenMap = {}; // { token: { hwid, timestamp } }
 
 function gerarKey() {
-  const caracteres = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let key = "";
-  for (let i = 0; i < 40; i++) {
-    key += caracteres.charAt(Math.floor(Math.random() * caracteres.length));
-  }
-  return key;
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  return Array.from({ length: 40 }, () =>
+    chars.charAt(Math.floor(Math.random() * chars.length))
+  ).join("");
 }
 
-// ROTA /go → recebe hwid, gera token e redireciona para link encurtado com token
+// 🔁 Limpa tokens com mais de 10 minutos
+function limparTokensExpirados() {
+  const agora = Date.now();
+  for (const token in tokenMap) {
+    if (agora - tokenMap[token].timestamp > 10 * 60 * 1000) {
+      delete tokenMap[token];
+    }
+  }
+}
+
+// 🔁 ROTA /go → gera token e mostra botão para encurtador + gerar key
 app.get("/go", (req, res) => {
+  limparTokensExpirados();
+
   const hwid = req.query.hwid;
   const src = req.query.src || "linkvertise";
-
   if (!hwid) return res.status(400).send("HWID ausente.");
 
   const token = crypto.randomUUID();
   tokenMap[token] = { hwid, timestamp: Date.now() };
 
-  let encurtador = "";
-  if (src === "linkvertise") {
-    encurtador = "https://link-hub.net/1374242/xChXAM3IRghL";
-  } else if (src === "workink") {
-    encurtador = "https://workink.net/221q/r3wvdu1w";
-  } else {
-    return res.status(400).send("Fonte inválida.");
-  }
+  const encurtador = src === "workink"
+    ? "https://workink.net/221q/r3wvdu1w"
+    : "https://link-hub.net/1374242/xChXAM3IRghL";
 
-  // Redireciona com instrução + token visível
   res.send(`
     <html>
-      <head><title>Geração de Key</title></head>
-      <body style="font-family:sans-serif;text-align:center;padding-top:80px;">
-        <h2>1º Passo:</h2>
-        <p>Conclua o encurtador abaixo para gerar sua key:</p>
+      <head><title>Validação</title></head>
+      <body style="font-family:sans-serif;text-align:center;padding-top:60px;">
+        <h2>Passo 1</h2>
+        <p>Conclua o encurtador abaixo:</p>
         <a href="${encurtador}" target="_blank">
-          <button style="font-size:18px;padding:10px 30px;">Abrir Link (${src})</button>
+          <button style="font-size:18px;padding:10px 30px;margin:10px;">Abrir Link (${src})</button>
         </a>
-        <h2>2º Passo:</h2>
-        <p>Depois de terminar o encurtador, clique abaixo:</p>
-        <a href="/?token=${token}">
+        <hr style="margin: 40px 0;" />
+        <h2>Passo 2</h2>
+        <p>Depois de concluir, clique abaixo:</p>
+        <form method="GET" action="/">
+          <input type="hidden" name="token" value="${token}" />
           <button style="font-size:18px;padding:10px 30px;">Gerar Key</button>
-        </a>
+        </form>
       </body>
     </html>
   `);
 });
 
-app.get("/admin/permakey", (req, res) => {
-  const auth = req.query.auth;
-  const hwid = req.query.hwid;
-  const key = req.query.key;
-
-  if (auth !== "SENHA123") return res.status(403).send("Acesso negado.");
-  if (!hwid || !key) return res.status(400).send("Faltando hwid ou key.");
-
-  const data = JSON.parse(fs.readFileSync(DATA_FILE));
-  data.push({
-    key: key,
-    hwid: hwid,
-    usedAt: null,
-    generatedAt: Date.now(),
-    permanent: true
-  });
-
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-  res.send("✅ Key permanente adicionada com sucesso.");
-});
-
-
-// ROTA PRINCIPAL /
+// ✅ ROTA / → só permite gerar key com token válido
 app.get("/", (req, res) => {
   try {
-    const incomingToken = req.query.token;
+    limparTokensExpirados();
 
-    // 🔒 1. Token obrigatório
+    const incomingToken = req.query.token;
     if (!incomingToken || !tokenMap[incomingToken]) {
       return res.status(403).send(`
-        <html>
-          <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
-            <h1>❌ Acesso negado</h1>
-            <p>Você deve passar pelo encurtador antes de gerar uma key.</p>
-          </body>
-        </html>
+        <html><body style="font-family:sans-serif;text-align:center;padding-top:100px;">
+        <h1>❌ Acesso negado</h1>
+        <p>Você deve passar pelo encurtador antes de gerar uma key.</p>
+        </body></html>
       `);
     }
 
     const hwid = tokenMap[incomingToken].hwid;
-
-    if (!hwid) {
-      return res.status(400).send("HWID ausente no token.");
-    }
+    if (!hwid) return res.status(400).send("HWID ausente.");
 
     const now = Date.now();
     const data = JSON.parse(fs.readFileSync(DATA_FILE));
     const ultima = data.find(e => e.hwid === hwid && e.generatedAt);
 
-    // 🔒 2. Impedir geração múltipla por dia
     if (ultima && now - ultima.generatedAt < 24 * 60 * 60 * 1000) {
       const restante = Math.ceil((24 * 60 * 60 * 1000 - (now - ultima.generatedAt)) / (60 * 1000));
       return res.send(`
@@ -121,19 +98,17 @@ app.get("/", (req, res) => {
       `);
     }
 
-    // 🔐 Gera e salva nova key
     const novaKey = gerarKey();
-    data.push({ key: novaKey, hwid: hwid, usedAt: null, generatedAt: now });
+    data.push({ key: novaKey, hwid, usedAt: null, generatedAt: now });
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 
-    // ✅ Mostra key ao usuário
     res.send(`
       <html>
         <head><title>Sua Key</title></head>
         <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
           <h1>Sua key exclusiva:</h1>
           <p style="font-size:22px;font-weight:bold;font-family:monospace">${novaKey}</p>
-          <p>Use no seu programa. A key é válida por 24h após o primeiro uso e vinculada ao seu computador.</p>
+          <p>Use no seu programa. A key é válida por 24h e vinculada ao seu computador.</p>
         </body>
       </html>
     `);
@@ -143,7 +118,7 @@ app.get("/", (req, res) => {
   }
 });
 
-// ROTA /check/:key
+// ✅ ROTA /check/:key
 app.get("/check/:key", (req, res) => {
   const key = req.params.key.trim().toLowerCase();
   const hwid = (req.query.hwid || "").trim();
@@ -155,14 +130,9 @@ app.get("/check/:key", (req, res) => {
 
   const now = Date.now();
 
-  if (!entry.hwid) {
-    entry.hwid = hwid;
-    entry.usedAt = now;
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-    return res.send("VALID");
-  }
-
   if (entry.hwid === hwid) {
+    if (entry.permanent === true) return res.send("VALID");
+
     if (!entry.usedAt) {
       entry.usedAt = now;
       fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
@@ -177,7 +147,7 @@ app.get("/check/:key", (req, res) => {
   return res.send("USED_BY_OTHER");
 });
 
-// ROTA /admin
+// ✅ Painel /admin
 app.get("/admin", (req, res) => {
   const auth = req.query.auth;
   if (auth !== "SENHA123") return res.status(403).send("Acesso negado.");
@@ -190,16 +160,14 @@ app.get("/admin", (req, res) => {
       : "❌ Key não encontrada."
     : "";
 
-  const rows = data
-    .map(k => `
-      <tr>
-        <td>${k.key}</td>
-        <td>${k.hwid}</td>
-        <td>${k.generatedAt ? new Date(k.generatedAt).toLocaleString() : "-"}</td>
-        <td>${k.usedAt ? new Date(k.usedAt).toLocaleString() : "-"}</td>
-      </tr>
-    `)
-    .join("");
+  const rows = data.map(k => `
+    <tr>
+      <td>${k.key}</td>
+      <td>${k.hwid}</td>
+      <td>${k.generatedAt ? new Date(k.generatedAt).toLocaleString() : "-"}</td>
+      <td>${k.usedAt ? new Date(k.usedAt).toLocaleString() : "-"}</td>
+    </tr>
+  `).join("");
 
   res.send(`
     <html>
@@ -215,7 +183,6 @@ app.get("/admin", (req, res) => {
       </head>
       <body>
         <h2>Painel de Admin</h2>
-
         <form method="GET" action="/admin">
           <input type="hidden" name="auth" value="${auth}"/>
           <label>Verificar se a key existe:</label><br/>
@@ -223,23 +190,15 @@ app.get("/admin", (req, res) => {
           <button type="submit">Verificar</button>
         </form>
         <p><strong>${resultadoVerificacao}</strong></p>
-
         <hr/>
-
         <form method="POST" action="/admin/create?auth=${auth}">
           <label>Gerar key manual para HWID:</label><br/>
           <input type="text" name="hwid" required />
           <button type="submit">Criar Key</button>
         </form>
-
         <h3>Lista de todas as keys</h3>
         <table>
-          <tr>
-            <th>Key</th>
-            <th>HWID</th>
-            <th>Gerada em</th>
-            <th>Usada em</th>
-          </tr>
+          <tr><th>Key</th><th>HWID</th><th>Gerada em</th><th>Usada em</th></tr>
           ${rows}
         </table>
       </body>
@@ -247,7 +206,7 @@ app.get("/admin", (req, res) => {
   `);
 });
 
-// /admin/create
+// ✅ Criação manual
 app.post("/admin/create", (req, res) => {
   const auth = req.query.auth;
   if (auth !== "SENHA123") return res.status(403).send("Acesso negado.");
@@ -259,7 +218,7 @@ app.post("/admin/create", (req, res) => {
   const newKey = gerarKey();
   const now = Date.now();
 
-  data.push({ key: newKey, hwid: hwid, usedAt: null, generatedAt: now });
+  data.push({ key: newKey, hwid, usedAt: null, generatedAt: now });
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 
   res.redirect(`/admin?auth=${auth}`);
