@@ -135,14 +135,24 @@ app.post("/admin/delete", (req, res) => {
 // Executor verifica key
 app.get("/admin/check/:key", (req, res) => {
   if (!req.session.loggedIn) return res.sendStatus(403);
+
   const { key } = req.params;
   const { hwid } = req.query;
   if (!key || !hwid) return res.send("MISSING");
+
   const data = JSON.parse(fs.readFileSync(DATA_FILE));
   const entry = data.find(k => k.key === key);
   if (!entry) return res.send("INVALID");
-  if (entry.hwid && entry.hwid !== hwid) return res.send("USED_BY_OTHER");
-  if (!entry.permanente && (Date.now() - entry.timestamp > VALIDITY_DURATION)) return res.send("EXPIRED");
+
+  // Se já tiver sido usado, mesmo pelo mesmo HWID, marca como invalidado
+  if (entry.hwid) {
+    // Opcional: remover ou marcar como consumido
+    entry.hwid = entry.hwid; // já está usado
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    return res.send("USED_BY_OTHER");
+  }
+
+  // Se não usado antes, é válido
   entry.hwid = hwid;
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
   return res.send("VALID");
