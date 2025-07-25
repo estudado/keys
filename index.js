@@ -145,19 +145,14 @@ app.get("/admin/check/:key", (req, res) => {
   const entry = data.find(k => k.key === key);
   if (!entry) return res.send("INVALID");
 
-  // Se já tiver sido usado, mesmo pelo mesmo HWID, marca como invalidado
-  if (entry.hwid) {
-    // Opcional: remover ou marcar como consumido
-    entry.hwid = entry.hwid; // já está usado
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-    return res.send("USED_BY_OTHER");
-  }
+  if (entry.consumed) return res.send("USED_BY_OTHER");
 
-  // Se não usado antes, é válido
-  entry.hwid = hwid;
+  entry.consumed = true;
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+
   return res.send("VALID");
 });
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("Server running on port", PORT));
