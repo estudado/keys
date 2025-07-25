@@ -18,7 +18,6 @@ function gerarKey() {
   ).join("");
 }
 
-// 🔁 Limpa tokens com mais de 10 minutos
 function limparTokensExpirados() {
   const agora = Date.now();
   for (const token in tokenMap) {
@@ -28,7 +27,6 @@ function limparTokensExpirados() {
   }
 }
 
-// 🔁 ROTA /go → gera token e mostra botão para encurtador + gerar key
 app.get("/go", (req, res) => {
   limparTokensExpirados();
 
@@ -64,7 +62,6 @@ app.get("/go", (req, res) => {
   `);
 });
 
-// ✅ ROTA / → só permite gerar key com token válido
 app.get("/", (req, res) => {
   try {
     limparTokensExpirados();
@@ -102,6 +99,8 @@ app.get("/", (req, res) => {
     data.push({ key: novaKey, hwid, usedAt: null, generatedAt: now });
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 
+    delete tokenMap[incomingToken];
+
     res.send(`
       <html>
         <head><title>Sua Key</title></head>
@@ -116,112 +115,6 @@ app.get("/", (req, res) => {
     console.error("Erro na rota /:", err);
     res.status(500).send("Erro interno no servidor.");
   }
-});
-
-// ✅ ROTA /check/:key
-app.get("/check/:key", (req, res) => {
-  const key = req.params.key.trim().toLowerCase();
-  const hwid = (req.query.hwid || "").trim();
-  if (!key || !hwid) return res.send("MISSING");
-
-  let data = JSON.parse(fs.readFileSync(DATA_FILE));
-  const entry = data.find(k => k.key === key);
-  if (!entry) return res.send("INVALID");
-
-  const now = Date.now();
-
-  if (entry.hwid === hwid) {
-    if (entry.permanent === true) return res.send("VALID");
-
-    if (!entry.usedAt) {
-      entry.usedAt = now;
-      fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-      return res.send("VALID");
-    }
-
-    const elapsed = now - entry.usedAt;
-    if (elapsed <= 24 * 60 * 60 * 1000) return res.send("VALID");
-    else return res.send("EXPIRED");
-  }
-
-  return res.send("USED_BY_OTHER");
-});
-
-// ✅ Painel /admin
-app.get("/admin", (req, res) => {
-  const auth = req.query.auth;
-  if (auth !== "SENHA123") return res.status(403).send("Acesso negado.");
-
-  const data = JSON.parse(fs.readFileSync(DATA_FILE));
-  const verificada = req.query.keyverificada;
-  const resultadoVerificacao = verificada
-    ? data.find(k => k.key === verificada)
-      ? "✅ Key encontrada."
-      : "❌ Key não encontrada."
-    : "";
-
-  const rows = data.map(k => `
-    <tr>
-      <td>${k.key}</td>
-      <td>${k.hwid}</td>
-      <td>${k.generatedAt ? new Date(k.generatedAt).toLocaleString() : "-"}</td>
-      <td>${k.usedAt ? new Date(k.usedAt).toLocaleString() : "-"}</td>
-    </tr>
-  `).join("");
-
-  res.send(`
-    <html>
-      <head>
-        <title>Admin - Painel de Keys</title>
-        <style>
-          body { font-family:sans-serif; padding:30px; }
-          table { border-collapse: collapse; width: 100%; }
-          th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-          th { background-color: #f2f2f2; }
-          input[type=text] { width: 400px; padding: 6px; }
-        </style>
-      </head>
-      <body>
-        <h2>Painel de Admin</h2>
-        <form method="GET" action="/admin">
-          <input type="hidden" name="auth" value="${auth}"/>
-          <label>Verificar se a key existe:</label><br/>
-          <input type="text" name="keyverificada" required />
-          <button type="submit">Verificar</button>
-        </form>
-        <p><strong>${resultadoVerificacao}</strong></p>
-        <hr/>
-        <form method="POST" action="/admin/create?auth=${auth}">
-          <label>Gerar key manual para HWID:</label><br/>
-          <input type="text" name="hwid" required />
-          <button type="submit">Criar Key</button>
-        </form>
-        <h3>Lista de todas as keys</h3>
-        <table>
-          <tr><th>Key</th><th>HWID</th><th>Gerada em</th><th>Usada em</th></tr>
-          ${rows}
-        </table>
-      </body>
-    </html>
-  `);
-});
-
-// ✅ Criação manual
-app.post("/admin/create", (req, res) => {
-  const auth = req.query.auth;
-  if (auth !== "SENHA123") return res.status(403).send("Acesso negado.");
-
-  const hwid = (req.body.hwid || "").trim();
-  if (!hwid) return res.status(400).send("HWID inválido.");
-
-  const data = JSON.parse(fs.readFileSync(DATA_FILE));
-  const newKey = gerarKey();
-  const now = Date.now();
-
-  data.push({ key: newKey, hwid, usedAt: null, generatedAt: now });
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-
-  res.redirect(`/admin?auth=${auth}`);
 });
 
 app.listen(3000, () => {
