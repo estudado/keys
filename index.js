@@ -85,10 +85,11 @@ app.get("/admin/permakey", (req, res) => {
 app.get("/", (req, res) => {
   try {
     const incomingToken = req.query.token;
-    if (incomingToken && tokenMap[incomingToken]) {
-    req.query.hwid = tokenMap[incomingToken].hwid;
+    if (!incomingToken || !tokenMap[incomingToken]) {
+    return res.status(403).send("❌ Acesso negado. Token inválido ou ausente.");
     }
-
+    
+    req.query.hwid = tokenMap[incomingToken].hwid;
 
     const referer = req.headers.referer || "";
     const src = req.query.src || "";
