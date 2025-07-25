@@ -149,29 +149,32 @@ app.get("/go", async (req, res) => {
 // rota exemplo no Express
 app.get('/validate', async (req, res) => {
   const hash = req.query.hash;
-  const hwid = req.query.hwid; // se desejar capturar HWID também
+  const hwid = req.query.hwid;
 
-  if (!hash) return res.status(400).send('Missing hash');
+  if (!hash || !hwid) return res.status(400).send('Parâmetros ausentes');
 
   try {
     const resp = await axios.get(`https://work.ink/_api/v2/token/isValid/${hash}?deleteToken=1`);
     const data = resp.data;
 
-    if (data.valid) {
-      // Gere ou verifique a licença com HWID (via KeyAuth Seller API)
-      // Exemplo: criar key, registrar HWID, etc.
-      res.send(`SUA_KEY_AQUI`);
-    } else {
-      res.send('INVALID');
-    }
+    if (!data.valid) return res.send('INVALID');
+
+    // Checar se HWID já tem key
+    const keysData = JSON.parse(fs.readFileSync(DATA_FILE));
+    const existente = keysData.find(k => k.hwid === hwid);
+    if (existente) return res.send(existente.key);
+
+    // Gerar nova key
+    const novaKey = gerarKey();
+    keysData.push({ hwid, key: novaKey, timestamp: Date.now() });
+    fs.writeFileSync(DATA_FILE, JSON.stringify(keysData, null, 2));
+
+    res.send(novaKey);
   } catch (err) {
     console.error(err);
-    res.status(500).send('ERROR');
+    res.status(500).send('Erro ao validar hash.');
   }
 });
-
-
-// As demais rotas permanecem inalteradas...
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
