@@ -140,5 +140,28 @@ app.post("/admin/delete", (req, res) => {
   return res.sendStatus(200);
 });
 
+// 🔒 ROTA: vincular HWID à key após primeiro uso
+app.post("/admin/bind", (req, res) => {
+  const { key, hwid } = req.body;
+  if (!key || !hwid) return res.status(400).send("MISSING");
+
+  const data = JSON.parse(fs.readFileSync(DATA_FILE));
+  const entry = data.find(k => k.key === key);
+  if (!entry) return res.status(404).send("NOT_FOUND");
+
+  if (entry.hwid && entry.hwid !== hwid)
+    return res.status(403).send("USED_BY_OTHER");
+
+  // Atualiza apenas se hwid ainda não estiver definido
+  if (!entry.hwid) {
+    entry.hwid = hwid;
+    entry.activatedAt = Date.now();
+    saveKeys(data);
+    return res.send("BOUND");
+  }
+
+  return res.send("ALREADY_BOUND");
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("✅ Server rodando na porta", PORT));
