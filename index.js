@@ -134,24 +134,34 @@ app.post("/admin/delete", (req, res) => {
 });
 
 // Executor verifica key
-app.get("/admin/check/:key", (req, res) => {
-  if (!req.session.loggedIn) return res.sendStatus(403);
+const VALIDITY_DURATION = 24 * 60 * 60 * 1000; // 24 horas
 
+app.get('/admin/check/:key', (req, res) => {
   const { key } = req.params;
   const { hwid } = req.query;
-  if (!key || !hwid) return res.send("MISSING");
+  if (!key || !hwid) return res.send('MISSING');
 
   const data = JSON.parse(fs.readFileSync(DATA_FILE));
   const entry = data.find(k => k.key === key);
-  if (!entry) return res.send("INVALID");
+  if (!entry) return res.send('INVALID');
 
-  if (entry.consumed) return res.send("USED_BY_OTHER");
+  if (entry.hwid === undefined) {
+    entry.hwid = hwid;
+    entry.activatedAt = Date.now();
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  }
 
-  entry.consumed = true;
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  if (entry.hwid !== hwid) {
+    return res.send('USED_BY_OTHER');
+  }
 
-  return res.send("VALID");
+  if (!entry.permanente && (Date.now() - entry.activatedAt > VALIDITY_DURATION)) {
+    return res.send('EXPIRED');
+  }
+
+  res.send('VALID');
 });
+
 
 
 const PORT = process.env.PORT || 3000;
