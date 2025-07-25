@@ -45,22 +45,17 @@ app.get("/validate", async (req, res) => {
   if (!hash || !hwid) return res.status(400).send("MISSING");
 
   try {
-    // Valida token do Work.ink
     const response = await axios.get(`https://work.ink/_api/v2/token/isValid/${hash}?deleteToken=1`);
     if (!response.data.valid) return res.send("INVALID");
 
-    // Carrega arquivo
     const keys = JSON.parse(fs.readFileSync(DATA_FILE));
 
-    // Verifica se já tem key para esse HWID
-    let existente = keys.find(k => k.hwid === hwid);
-    if (existente) return res.send(existente.key); // Reenvia a mesma key
+    // Se o token já foi salvo, só retorna
+    if (keys.find(k => k.key === hash)) return res.send(hash);
 
-    // Gera nova key
-    const novaKey = gerarKey();
     const entry = {
       hwid,
-      key: novaKey,
+      key: hash, // <- usa o próprio token como key
       timestamp: Date.now(),
       permanente: false,
       activatedAt: null
@@ -69,7 +64,7 @@ app.get("/validate", async (req, res) => {
     keys.push(entry);
     fs.writeFileSync(DATA_FILE, JSON.stringify(keys, null, 2));
 
-    return res.send(novaKey);
+    return res.send(hash); // <- retorna o token como key
   } catch (err) {
     console.error("Erro ao validar token:", err.message);
     return res.status(500).send("ERROR");
