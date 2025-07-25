@@ -277,6 +277,33 @@ app.post("/admin/delete", (req, res) => {
   res.redirect("/admin/dashboard");
 });
 
+app.get('/admin/check/:key', (req, res) => {
+  const sess = req.session;
+  if (!sess.loggedIn) return res.status(403).send('FORBIDDEN');
+
+  const keyParam = req.params.key;
+  const hwid = req.query.hwid;
+  if (!keyParam || !hwid) return res.send('MISSING');
+
+  const keysData = JSON.parse(fs.readFileSync(DATA_FILE));
+  const entry = keysData.find(k => k.key === keyParam);
+  if (!entry) return res.send('INVALID');
+
+  if (entry.hwid && entry.hwid !== hwid) {
+    return res.send('USED_BY_OTHER');
+  }
+
+  if (!entry.permanente && Date.now() - entry.timestamp > VALIDITY_DURATION) {
+    return res.send('EXPIRED');
+  }
+
+  // Marca hwid vinculado
+  entry.hwid = hwid;
+  fs.writeFileSync(DATA_FILE, JSON.stringify(keysData, null, 2));
+  
+  res.send('VALID');
+});
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
