@@ -59,6 +59,28 @@ app.get("/go", (req, res) => {
   `);
 });
 
+app.get("/admin/permakey", (req, res) => {
+  const auth = req.query.auth;
+  const hwid = req.query.hwid;
+  const key = req.query.key;
+
+  if (auth !== "SENHA123") return res.status(403).send("Acesso negado.");
+  if (!hwid || !key) return res.status(400).send("Faltando hwid ou key.");
+
+  const data = JSON.parse(fs.readFileSync(DATA_FILE));
+  data.push({
+    key: key,
+    hwid: hwid,
+    usedAt: null,
+    generatedAt: Date.now(),
+    permanent: true
+  });
+
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  res.send("✅ Key permanente adicionada com sucesso.");
+});
+
+
 // ROTA PRINCIPAL /
 app.get("/", (req, res) => {
   try {
