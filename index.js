@@ -85,29 +85,30 @@ app.get("/admin/permakey", (req, res) => {
 app.get("/", (req, res) => {
   try {
     const incomingToken = req.query.token;
+
+    // 🔒 1. Token obrigatório
     if (!incomingToken || !tokenMap[incomingToken]) {
-    return res.status(403).send("❌ Acesso negado. Token inválido ou ausente.");
-    }
-    
-    req.query.hwid = tokenMap[incomingToken].hwid;
-
-    const referer = req.headers.referer || "";
-    const src = req.query.src || "";
-    const hwid = (req.query.hwid || "").trim();
-
-    const isFromLinkvertise = referer.includes("linkvertise.com") || src === "linkvertise";
-    const isFromWorkInk = referer.includes("work.ink") || src === "workink";
-
-    if (!isFromLinkvertise && !isFromWorkInk && !incomingToken) {
-      return res.status(403).send("Acesso negado: utilize Linkvertise ou Work.ink.");
+      return res.status(403).send(`
+        <html>
+          <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
+            <h1>❌ Acesso negado</h1>
+            <p>Você deve passar pelo encurtador antes de gerar uma key.</p>
+          </body>
+        </html>
+      `);
     }
 
-    if (!hwid) return res.status(400).send("HWID é obrigatório para gerar a key.");
+    const hwid = tokenMap[incomingToken].hwid;
+
+    if (!hwid) {
+      return res.status(400).send("HWID ausente no token.");
+    }
 
     const now = Date.now();
     const data = JSON.parse(fs.readFileSync(DATA_FILE));
     const ultima = data.find(e => e.hwid === hwid && e.generatedAt);
 
+    // 🔒 2. Impedir geração múltipla por dia
     if (ultima && now - ultima.generatedAt < 24 * 60 * 60 * 1000) {
       const restante = Math.ceil((24 * 60 * 60 * 1000 - (now - ultima.generatedAt)) / (60 * 1000));
       return res.send(`
@@ -120,17 +121,19 @@ app.get("/", (req, res) => {
       `);
     }
 
+    // 🔐 Gera e salva nova key
     const novaKey = gerarKey();
     data.push({ key: novaKey, hwid: hwid, usedAt: null, generatedAt: now });
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 
+    // ✅ Mostra key ao usuário
     res.send(`
       <html>
         <head><title>Sua Key</title></head>
         <body style="font-family:sans-serif;text-align:center;padding-top:100px;">
           <h1>Sua key exclusiva:</h1>
           <p style="font-size:22px;font-weight:bold;font-family:monospace">${novaKey}</p>
-          <p>Use no seu programa. A key é válida por 24h após o primeiro uso e apenas em 1 computador.</p>
+          <p>Use no seu programa. A key é válida por 24h após o primeiro uso e vinculada ao seu computador.</p>
         </body>
       </html>
     `);
