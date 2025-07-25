@@ -39,7 +39,7 @@ function limparTokensExpirados() {
 const GITHUB_USER = "estudado";
 const GITHUB_REPO = "keys";
 const GITHUB_FILE_PATH = "public/code.txt";
-const GITHUB_TOKEN = "ghp_SEU_TOKEN_AQUI";
+const GITHUB_TOKEN = "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";
 
 app.get("/", (req, res) => {
   res.send(`<html><body style="text-align:center;padding-top:100px;font-family:sans-serif">
