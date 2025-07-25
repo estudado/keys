@@ -57,12 +57,14 @@ app.get("/go", (req, res) => {
   `);
 });
 
+// Rota intermediária para redirecionar ao encurtador
 app.get("/redir", (req, res) => {
   const token = req.query.token;
   const src = req.query.src || "linkvertise";
+
   if (!tokenMap[token]) return res.status(400).send("Token inválido.");
 
-  // Marca que o usuário passou pelo redirecionador
+  // Marca que o usuário passou pela rota de redirecionamento
   tokenMap[token].redirOk = true;
 
   const encurtador = src === "workink"
@@ -86,7 +88,7 @@ app.get("/getkey", (req, res) => {
       `);
     }
 
-    // Checa se o usuário de fato passou pelo redirecionador (e portanto, pelo menos tentou acessar o encurtador)
+    // Verifica se o usuário passou pelo redirecionador
     if (!tokenMap[incomingToken].redirOk) {
       return res.status(403).send(`
         <html><body style="font-family:sans-serif;text-align:center;padding-top:100px;">
@@ -138,7 +140,7 @@ app.get("/getkey", (req, res) => {
   }
 });
 
-// O painel /admin permanece como está. As outras funcionalidades podem ser reativadas conforme necessidade.
+// Painel de admin permanece inalterado (se necessário, pode ser adicionado aqui).
 
 app.listen(3000, () => {
   console.log("Servidor rodando na porta 3000");
