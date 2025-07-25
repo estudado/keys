@@ -44,10 +44,11 @@ app.get("/go", (req, res) => {
 // ROTA PRINCIPAL /
 app.get("/", (req, res) => {
   try {
-    const token = req.query.token;
-    if (token && tokenMap[token]) {
-      req.query.hwid = tokenMap[token].hwid;
+    const incomingToken = req.query.token;
+    if (incomingToken && tokenMap[incomingToken]) {
+    req.query.hwid = tokenMap[incomingToken].hwid;
     }
+
 
     const referer = req.headers.referer || "";
     const src = req.query.src || "";
