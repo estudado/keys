@@ -148,18 +148,28 @@ app.get("/go", async (req, res) => {
 
 // rota exemplo no Express
 app.get('/validate', async (req, res) => {
-  const { hash, hwid } = req.query;
-  if (!hash || !hwid) return res.status(400).send('Missing');
+  const hash = req.query.hash;
+  const hwid = req.query.hwid; // se desejar capturar HWID também
 
-  // verificar token no Work.ink:
-  const resp = await axios.get(`https://work.ink/_api/v2/token/isValid/${hash}`);
-  if (resp.data.valid) {
-    // prossegue gerar key ou verificar hwid etc.
-    res.send('VALID');
-  } else {
-    res.send('INVALID');
+  if (!hash) return res.status(400).send('Missing hash');
+
+  try {
+    const resp = await axios.get(`https://work.ink/_api/v2/token/isValid/${hash}?deleteToken=1`);
+    const data = resp.data;
+
+    if (data.valid) {
+      // Gere ou verifique a licença com HWID (via KeyAuth Seller API)
+      // Exemplo: criar key, registrar HWID, etc.
+      res.send(`SUA_KEY_AQUI`);
+    } else {
+      res.send('INVALID');
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('ERROR');
   }
 });
+
 
 // As demais rotas permanecem inalteradas...
 
