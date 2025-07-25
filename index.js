@@ -177,26 +177,25 @@ app.post("/admin/delete", (req, res) => {
 app.get("/admin/check/:key", (req, res) => {
   const { key } = req.params;
   const { hwid } = req.query;
-  if (!key || !hwid) return res.send("MISSING");
+  if (!key) return res.send("MISSING");
 
   const data = JSON.parse(fs.readFileSync(DATA_FILE));
   const entry = data.find(k => k.key === key);
   if (!entry) return res.send("INVALID");
 
-  // Se primeira ativação, associa o HWID
-  if (!entry.hwid) {
+  // Se primeira ativação, salva hwid para estatística (opcional)
+  if (!entry.hwid && hwid) {
     entry.hwid = hwid;
     entry.activatedAt = Date.now();
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
   }
 
-  // Se ativada em outro HWID
-  if (entry.hwid !== hwid) return res.send("USED_BY_OTHER");
+  // ✅ REMOVE essa verificação ↓
+  // if (entry.hwid && entry.hwid !== hwid) return res.send("USED_BY_OTHER");
 
-  // Se expirou (a menos que seja permanente)
-  if (!entry.permanente && Date.now() - entry.activatedAt > VALIDITY_DURATION) {
+  // Se key não for permanente e estiver expirada
+  if (!entry.permanente && entry.activatedAt && Date.now() - entry.activatedAt > VALIDITY_DURATION)
     return res.send("EXPIRED");
-  }
 
   return res.send("VALID");
 });
