@@ -23,23 +23,18 @@ app.use(session({
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 const DATA_FILE = "keys.json";
-const VALIDITY_DURATION = 24 * 60 * 60 * 1000; // 24 horas
+const VALIDITY_DURATION = 24 * 60 * 60 * 1000; // 24h
 
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, "[]");
-
-function gerarKey() {
-  return crypto.randomBytes(20).toString("hex");
-}
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// Página inicial simples
-app.get("/", (_req, res) => {
-  res.send("✅ Sistema de Keys ativo. Use /validate?hash=...&hwid=...");
-});
+function saveKeys(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+}
 
-// ROTA PRINCIPAL: Gera uma key a partir do token Workink + hwid
+// 🔐 ROTA: transforma token do Workink em key final
 app.get("/validate", async (req, res) => {
   const { hash, hwid } = req.query;
   if (!hash || !hwid) return res.status(400).send("MISSING");
@@ -50,28 +45,54 @@ app.get("/validate", async (req, res) => {
 
     const keys = JSON.parse(fs.readFileSync(DATA_FILE));
 
-    // Se o token já foi salvo, só retorna
+    // Se o token já foi usado como key, reenvia
     if (keys.find(k => k.key === hash)) return res.send(hash);
 
     const entry = {
       hwid,
-      key: hash, // <- usa o próprio token como key
+      key: hash, // usa o token como key final
       timestamp: Date.now(),
       permanente: false,
       activatedAt: null
     };
 
     keys.push(entry);
-    fs.writeFileSync(DATA_FILE, JSON.stringify(keys, null, 2));
-
-    return res.send(hash); // <- retorna o token como key
+    saveKeys(keys);
+    return res.send(hash);
   } catch (err) {
-    console.error("Erro ao validar token:", err.message);
+    console.error("Erro validate:", err.message);
     return res.status(500).send("ERROR");
   }
 });
 
-// Login admin
+// 🔐 ROTA: validação da key final usada no executor
+app.get("/admin/check/:key", (req, res) => {
+  const { key } = req.params;
+  const { hwid } = req.query;
+  if (!key) return res.send("MISSING");
+
+  const data = JSON.parse(fs.readFileSync(DATA_FILE));
+  const entry = data.find(k => k.key === key);
+  if (!entry) return res.send("INVALID");
+
+  // Salva hwid se ainda não estiver associado (opcional)
+  if (!entry.hwid && hwid) {
+    entry.hwid = hwid;
+    entry.activatedAt = Date.now();
+    saveKeys(data);
+  }
+
+  // REMOVE o bloqueio por HWID
+  // if (entry.hwid !== hwid) return res.send("USED_BY_OTHER");
+
+  // Verifica expiração (exceto permanente)
+  if (!entry.permanente && entry.activatedAt && Date.now() - entry.activatedAt > VALIDITY_DURATION)
+    return res.send("EXPIRED");
+
+  return res.send("VALID");
+});
+
+// 🛠 Painel admin (opcional)
 app.get("/admin", (req, res) => {
   if (req.session.loggedIn) return res.redirect("/admin/dashboard");
   res.send(`
@@ -90,111 +111,34 @@ app.post("/admin/login", (req, res) => {
   return res.sendStatus(401);
 });
 
-// Dashboard admin
 app.get("/admin/dashboard", (req, res) => {
   if (!req.session.loggedIn) return res.redirect("/admin");
 
   const keys = JSON.parse(fs.readFileSync(DATA_FILE));
   const lista = keys.map(k =>
-    `<li>${k.hwid}: ${k.key} ${k.permanente ? "(PERM)" : ""}</li>`
+    `<li>${k.hwid || "?"}: ${k.key} ${k.permanente ? "(PERM)" : ""}</li>`
   ).join("");
 
   res.send(`
     <h1>Admin - Keys</h1>
     <ul>${lista}</ul>
-    <form method="POST" action="/admin/create">
-      <input name="hwid" placeholder="HWID" required/>
-      <button>Criar Key</button>
-    </form>
-    <form method="POST" action="/admin/create-perm">
-      <input name="hwid" placeholder="HWID" required/>
-      <button>Criar PERM</button>
-    </form>
     <form method="POST" action="/admin/delete">
-      <input name="hwid" placeholder="HWID" required/>
+      <input name="key" placeholder="Key/token para deletar" required/>
       <button>Deletar</button>
     </form>
   `);
 });
 
-// Criação de key normal via painel
-app.post("/admin/create", (req, res) => {
-  if (!req.session.loggedIn) return res.sendStatus(403);
-  const { hwid } = req.body;
-
-  let data = JSON.parse(fs.readFileSync(DATA_FILE));
-  if (data.find(k => k.hwid === hwid)) return res.status(409).send("Já existe");
-
-  const entry = {
-    hwid,
-    key: gerarKey(),
-    timestamp: Date.now(),
-    permanente: false
-  };
-
-  data.push(entry);
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-  return res.json(entry);
-});
-
-// Criação de key permanente
-app.post("/admin/create-perm", (req, res) => {
-  if (!req.session.loggedIn) return res.sendStatus(403);
-  const { hwid } = req.body;
-
-  let data = JSON.parse(fs.readFileSync(DATA_FILE));
-  if (data.find(k => k.hwid === hwid)) return res.status(409).send("Já existe");
-
-  const entry = {
-    hwid,
-    key: gerarKey(),
-    timestamp: Date.now(),
-    permanente: true
-  };
-
-  data.push(entry);
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-  return res.json(entry);
-});
-
-// Deletar key
+// Deletar key por token
 app.post("/admin/delete", (req, res) => {
   if (!req.session.loggedIn) return res.sendStatus(403);
-  const { hwid } = req.body;
+  const { key } = req.body;
 
   let data = JSON.parse(fs.readFileSync(DATA_FILE));
-  data = data.filter(k => k.hwid !== hwid);
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  data = data.filter(k => k.key !== key);
+  saveKeys(data);
   return res.sendStatus(200);
 });
 
-// Validação de key usada pelo executor
-app.get("/admin/check/:key", (req, res) => {
-  const { key } = req.params;
-  const { hwid } = req.query;
-  if (!key) return res.send("MISSING");
-
-  const data = JSON.parse(fs.readFileSync(DATA_FILE));
-  const entry = data.find(k => k.key === key);
-  if (!entry) return res.send("INVALID");
-
-  // Se primeira ativação, salva hwid para estatística (opcional)
-  if (!entry.hwid && hwid) {
-    entry.hwid = hwid;
-    entry.activatedAt = Date.now();
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-  }
-
-  // ✅ REMOVE essa verificação ↓
-  // if (entry.hwid && entry.hwid !== hwid) return res.send("USED_BY_OTHER");
-
-  // Se key não for permanente e estiver expirada
-  if (!entry.permanente && entry.activatedAt && Date.now() - entry.activatedAt > VALIDITY_DURATION)
-    return res.send("EXPIRED");
-
-  return res.send("VALID");
-});
-
-// Inicia servidor
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("✅ Server running on port", PORT));
+app.listen(PORT, () => console.log("✅ Server rodando na porta", PORT));
