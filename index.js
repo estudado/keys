@@ -21,6 +21,10 @@ function gerarKey() {
 
 // ROTA /go
 app.get("/go", (req, res) => {
+  const token = req.query.token;
+if (token && tokenMap[token]) {
+  req.query.hwid = tokenMap[token].hwid;
+}
   const hwid = req.query.hwid;
   const src = req.query.src || "linkvertise";
 
