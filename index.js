@@ -3,6 +3,15 @@ const fs = require("fs");
 const crypto = require("crypto");
 const axios = require("axios");
 const app = express();
+const session = require("express-session");
+
+app.use(session({
+  secret: 'segredo_admin_superforte', // 🔒 troque por algo forte
+  resave: false,
+  saveUninitialized: false
+}));
+
+const ADMIN_PASSWORD = "admin123"; // 🛡️ senha fixa
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -182,6 +191,26 @@ app.get('/validate', async (req, res) => {
     console.error("Erro na validação:", err.message);
     res.status(500).send('Erro ao validar hash.');
   }
+});
+
+app.get("/admin", (req, res) => {
+  if (req.session.loggedIn) {
+    return res.redirect("/admin/dashboard");
+  }
+  res.send(`
+    <form method="POST" action="/admin/login" style="text-align:center;margin-top:100px">
+      <input type="password" name="senha" placeholder="Senha de admin" required />
+      <button type="submit">Entrar</button>
+    </form>
+  `);
+});
+
+app.post("/admin/login", (req, res) => {
+  if (req.body.senha === ADMIN_PASSWORD) {
+    req.session.loggedIn = true;
+    return res.redirect("/admin/dashboard");
+  }
+  res.send("Senha incorreta.");
 });
 
 const PORT = process.env.PORT || 3000;
