@@ -159,19 +159,27 @@ app.get('/validate', async (req, res) => {
 
     if (!data.valid) return res.send('INVALID');
 
-    // Checar se HWID já tem key
+    // Carrega arquivo local de keys
     const keysData = JSON.parse(fs.readFileSync(DATA_FILE));
-    const existente = keysData.find(k => k.hwid === hwid);
+
+    // Verifica se o HWID já tem key gerada
+    const existente = keysData.find(entry => entry.hwid === hwid);
     if (existente) return res.send(existente.key);
 
-    // Gerar nova key
+    // Gera nova key
     const novaKey = gerarKey();
-    keysData.push({ hwid, key: novaKey, timestamp: Date.now() });
+
+    // Salva no arquivo
+    keysData.push({
+      hwid,
+      key: novaKey,
+      geradoEm: new Date().toISOString()
+    });
     fs.writeFileSync(DATA_FILE, JSON.stringify(keysData, null, 2));
 
     res.send(novaKey);
   } catch (err) {
-    console.error(err);
+    console.error("Erro na validação:", err.message);
     res.status(500).send('Erro ao validar hash.');
   }
 });
