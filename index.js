@@ -144,24 +144,19 @@ app.get('/admin/check/:key', (req, res) => {
   const entry = data.find(k => k.key === key);
   if (!entry) return res.send('INVALID');
 
-  if (entry.hwid === undefined) {
+  if (!entry.hwid) {
     entry.hwid = hwid;
     entry.activatedAt = Date.now();
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
   }
 
-  if (entry.hwid !== hwid) {
-    return res.send('USED_BY_OTHER');
-  }
+  if (entry.hwid !== hwid) return res.send('USED_BY_OTHER');
 
-  if (!entry.permanente && (Date.now() - entry.activatedAt > VALIDITY_DURATION)) {
+  if (!entry.permanente && Date.now() - entry.activatedAt > VALIDITY_DURATION)
     return res.send('EXPIRED');
-  }
 
-  res.send('VALID');
+  return res.send('VALID');
 });
-
-
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("Server running on port", PORT));
