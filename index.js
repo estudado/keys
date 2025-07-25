@@ -1,6 +1,8 @@
 const express = require("express");
 const fs = require("fs");
 const app = express();
+const crypto = require("crypto");
+const tokenMap = {};
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -21,8 +23,22 @@ function gerarKey() {
 app.get("/go", (req, res) => {
   const hwid = req.query.hwid;
   const src = req.query.src || "linkvertise";
+
   if (!hwid) return res.status(400).send("HWID ausente.");
-  res.redirect(`/?src=${encodeURIComponent(src)}&hwid=${encodeURIComponent(hwid)}`);
+
+  const token = crypto.randomUUID();
+  tokenMap[token] = { hwid, timestamp: Date.now() };
+
+  let redirectUrl = "";
+  if (src === "linkvertise") {
+    redirectUrl = `https://link-hub.net/1374242/xChXAM3IRghL?token=${token}`;
+  } else if (src === "workink") {
+    redirectUrl = `https://workink.net/221q/r3wvdu1w?token=${token}`;
+  } else {
+    return res.status(400).send("Fonte inválida.");
+  }
+
+  res.redirect(redirectUrl);
 });
 
 // ROTA PRINCIPAL /
