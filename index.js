@@ -158,16 +158,15 @@ app.get("/admin/logout", (req, res) => {
   });
 });
 
-// Verifica a chave e vincula o HWID no primeiro uso
-app.get("/admin/check/:key", (req, res) => { // <-- MUDANÇA 1: A URL AGORA É /admin/check/:key
+app.get("/admin/check/:key", (req, res) => { 
   
-  // Pega a chave dos parâmetros da URL (o que vem depois de /check/)
-  const { key } = req.params; // <-- MUDANÇA 2: Pega a chave de req.params
+  // Pega a chave dos parâmetros da URL
+  const { key } = req.params; 
   
-  // Pega o HWID da query string (o que vem depois de ?)
-  const { hwid } = req.query; // <-- Isso permanece igual
+  // Pega o HWID da query string
+  const { hwid } = req.query;
 
-  // O resto da lógica é exatamente a mesma
+  // Resto da lógica (permanece igual)
   if (!key || !hwid) return res.status(400).send("MISSING_PARAMS");
 
   const keys = getKeys();
