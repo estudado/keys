@@ -26,7 +26,7 @@ app.use(session({
 
 // --- CONSTANTES E INICIALIZAÇÃO ---
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
-const DATA_FILE = "keys.json";
+const DATA_FILE = "/var/data/keys.json";
 const VALIDITY_DURATION = 24 * 60 * 60 * 1000; // 24 horas
 
 // Garante que o arquivo de chaves exista na inicialização
