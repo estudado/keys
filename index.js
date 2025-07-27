@@ -84,40 +84,6 @@ app.get("/validate", async (req, res) => {
   }
 });
 
-// Verifica a chave e vincula o HWID no primeiro uso
-app.get("/admin/check/:key", (req, res) => { // <-- MUDANÇA 1: A URL AGORA É /admin/check/:key
-  
-  // Pega a chave dos parâmetros da URL (o que vem depois de /check/)
-  const { key } = req.params; // <-- MUDANÇA 2: Pega a chave de req.params
-  
-  // Pega o HWID da query string (o que vem depois de ?)
-  const { hwid } = req.query; // <-- Isso permanece igual
-
-  // O resto da lógica é exatamente a mesma
-  if (!key || !hwid) return res.status(400).send("MISSING_PARAMS");
-
-  const keys = getKeys();
-  const keyEntry = keys.find(k => k.key === key);
-
-  if (!keyEntry) return res.status(404).send("INVALID_KEY");
-
-  if (!keyEntry.hwid) {
-    keyEntry.hwid = hwid;
-    keyEntry.activatedAt = Date.now();
-    saveKeys(keys);
-    console.log(`Chave ${key} vinculada ao HWID ${hwid}`);
-    return res.send("VALID");
-  }
-
-  if (keyEntry.hwid !== hwid) return res.status(403).send("HWID_MISMATCH");
-
-  if (!keyEntry.permanente && (Date.now() - keyEntry.activatedAt > VALIDITY_DURATION)) {
-    return res.status(403).send("EXPIRED_KEY");
-  }
-
-  return res.send("VALID");
-});
-
 // --- ROTAS DO PAINEL ADMIN ---
 
 app.get("/admin", (req, res) => {
@@ -190,6 +156,40 @@ app.get("/admin/logout", (req, res) => {
     res.clearCookie("sessionId");
     res.redirect("/admin");
   });
+});
+
+// Verifica a chave e vincula o HWID no primeiro uso
+app.get("/admin/check/:key", (req, res) => { // <-- MUDANÇA 1: A URL AGORA É /admin/check/:key
+  
+  // Pega a chave dos parâmetros da URL (o que vem depois de /check/)
+  const { key } = req.params; // <-- MUDANÇA 2: Pega a chave de req.params
+  
+  // Pega o HWID da query string (o que vem depois de ?)
+  const { hwid } = req.query; // <-- Isso permanece igual
+
+  // O resto da lógica é exatamente a mesma
+  if (!key || !hwid) return res.status(400).send("MISSING_PARAMS");
+
+  const keys = getKeys();
+  const keyEntry = keys.find(k => k.key === key);
+
+  if (!keyEntry) return res.status(404).send("INVALID_KEY");
+
+  if (!keyEntry.hwid) {
+    keyEntry.hwid = hwid;
+    keyEntry.activatedAt = Date.now();
+    saveKeys(keys);
+    console.log(`Chave ${key} vinculada ao HWID ${hwid}`);
+    return res.send("VALID");
+  }
+
+  if (keyEntry.hwid !== hwid) return res.status(403).send("HWID_MISMATCH");
+
+  if (!keyEntry.permanente && (Date.now() - keyEntry.activatedAt > VALIDITY_DURATION)) {
+    return res.status(403).send("EXPIRED_KEY");
+  }
+
+  return res.send("VALID");
 });
 
 // --- INICIALIZAÇÃO DO SERVIDOR ---
