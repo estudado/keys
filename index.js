@@ -172,7 +172,7 @@ app.get("/admin/check/:key", (req, res) => {
   const keys = getKeys();
   const keyEntry = keys.find(k => k.key === key);
 
-  if (!keyEntry) return res.status(404).send("INVALID_KEY");
+  if (!keyEntry) return res.status(200).send("INVALID_KEY");
 
   if (!keyEntry.hwid) {
     keyEntry.hwid = hwid;
