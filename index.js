@@ -148,17 +148,34 @@ app.get("/admin/dashboard", (req, res) => {
 
   const keys = getKeys();
   const keyListHtml = keys.map(k => {
+    // Opções para formatar a data e hora para o fuso horário de São Paulo
+    const dateTimeOptions = {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+    };
+
     let expiresText = "N/A";
     if (k.permanente) {
         expiresText = "Permanente";
     } else if (k.expiresAt) {
-        expiresText = new Date(k.expiresAt).toLocaleString();
+        // Formata a data de expiração para o fuso horário correto
+        expiresText = new Date(k.expiresAt).toLocaleString('pt-BR', dateTimeOptions);
     }
+
+    // Formata a data de ativação para o fuso horário correto, se existir
+    const activatedAtText = k.activatedAt
+        ? new Date(k.activatedAt).toLocaleString('pt-BR', dateTimeOptions)
+        : "N/A";
 
     return `<tr>
       <td>${k.key}</td>
       <td>${k.hwid || "Não vinculado"}</td>
-      <td>${k.activatedAt ? new Date(k.activatedAt).toLocaleString() : "N/A"}</td>
+      <td>${activatedAtText}</td>
       <td>${expiresText}</td>
     </tr>`
   }).join("");
