@@ -2,7 +2,7 @@ const express = require("express");
 const fs = require("fs");
 const session = require("express-session");
 const axios = require("axios");
-const { v4: uuidv4 } = require('uuid'); // Importa a função para gerar chaves únicas
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 
@@ -20,7 +20,7 @@ app.use(session({
     path: "/",
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 60 * 60 * 1000, // 1 hora
+    maxAge: 60 * 60 * 1000,
     sameSite: "lax",
   }
 }));
@@ -29,7 +29,6 @@ app.use(session({
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 const DATA_FILE = "/var/data/keys.json";
 
-// Garante que o arquivo de chaves exista
 if (!fs.existsSync(DATA_FILE)) {
   fs.writeFileSync(DATA_FILE, JSON.stringify([]));
 }
@@ -49,8 +48,6 @@ function saveKeys(data) {
 }
 
 // --- ROTAS DA API ---
-
-// Valida token do Work.ink e cria a chave (opcional, mantida do original)
 app.get("/validate", async (req, res) => {
   const { hash } = req.query;
   if (!hash) return res.status(400).send("MISSING_HASH");
@@ -66,13 +63,12 @@ app.get("/validate", async (req, res) => {
       return res.send(hash);
     }
 
-    // Chaves criadas aqui são temporárias (24h) por padrão
     const newKeyEntry = {
       key: hash,
       hwid: null,
       activatedAt: null,
       createdAt: Date.now(),
-      expiresAt: Date.now() + 24 * 60 * 60 * 1000, // Expira em 24 horas
+      expiresAt: Date.now() + 24 * 60 * 60 * 1000,
       permanente: false,
     };
 
@@ -86,7 +82,6 @@ app.get("/validate", async (req, res) => {
   }
 });
 
-// Rota de verificação de chave para o cliente
 app.get("/admin/check/:key", (req, res) => {
   const { key } = req.params;
   const { hwid } = req.query;
@@ -98,7 +93,6 @@ app.get("/admin/check/:key", (req, res) => {
 
   if (!keyEntry) return res.status(200).send("INVALID_KEY");
 
-  // Se a chave não tem HWID, vincula o primeiro
   if (!keyEntry.hwid) {
     keyEntry.hwid = hwid;
     keyEntry.activatedAt = Date.now();
@@ -106,22 +100,17 @@ app.get("/admin/check/:key", (req, res) => {
     console.log(`Chave ${key} vinculada ao HWID ${hwid}`);
   }
 
-  // Verifica se o HWID corresponde
   if (keyEntry.hwid !== hwid) return res.status(403).send("HWID_MISMATCH");
 
-  // Nova lógica de expiração
   if (!keyEntry.permanente && keyEntry.expiresAt && Date.now() > keyEntry.expiresAt) {
     console.log(`Tentativa de uso da chave expirada: ${key}`);
     return res.status(403).send("EXPIRED_KEY");
   }
 
-
   return res.send("VALID");
 });
 
-
 // --- ROTAS DO PAINEL ADMIN ---
-
 app.get("/admin", (req, res) => {
   if (req.session.loggedIn) return res.redirect("/admin/dashboard");
   res.send(`
@@ -142,35 +131,14 @@ app.post("/admin/login", (req, res) => {
   return res.status(401).send("Senha incorreta.");
 });
 
-// Dashboard atualizado com formulários de criação e deleção
 app.get("/admin/dashboard", (req, res) => {
   if (!req.session.loggedIn) return res.redirect("/admin");
 
   const keys = getKeys();
   const keyListHtml = keys.map(k => {
-    // Opções para formatar a data e hora para o fuso horário de São Paulo
-    const dateTimeOptions = {
-      timeZone: 'America/Sao_Paulo',
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      second: 'numeric',
-    };
-
-    let expiresText = "N/A";
-    if (k.permanente) {
-        expiresText = "Permanente";
-    } else if (k.expiresAt) {
-        // Formata a data de expiração para o fuso horário correto
-        expiresText = new Date(k.expiresAt).toLocaleString('pt-BR', dateTimeOptions);
-    }
-
-    // Formata a data de ativação para o fuso horário correto, se existir
-    const activatedAtText = k.activatedAt
-        ? new Date(k.activatedAt).toLocaleString('pt-BR', dateTimeOptions)
-        : "N/A";
+    const dateTimeOptions = { timeZone: 'America/Sao_Paulo', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' };
+    let expiresText = k.permanente ? "Permanente" : (k.expiresAt ? new Date(k.expiresAt).toLocaleString('pt-BR', dateTimeOptions) : "N/A");
+    const activatedAtText = k.activatedAt ? new Date(k.activatedAt).toLocaleString('pt-BR', dateTimeOptions) : "N/A";
 
     return `<tr>
       <td>${k.key}</td>
@@ -191,10 +159,11 @@ app.get("/admin/dashboard", (req, res) => {
 
     <div class="form-container">
         <div>
-            <h2>Criar Nova Chave</h2>
+            <h2>Criar/Adicionar Chave</h2>
             <form method="POST" action="/admin/create">
+              <input name="key" type="text" placeholder="Insira a chave desejada (ex: chave da Quorum)" required />
               <input name="dias" type="number" placeholder="Dias de validade (0 para permanente)" required />
-              <button type="submit">Criar Chave</button>
+              <button type="submit">Adicionar Chave</button>
             </form>
         </div>
         <div>
@@ -208,22 +177,24 @@ app.get("/admin/dashboard", (req, res) => {
   `);
 });
 
-// NOVA ROTA: Criar chave
 app.post("/admin/create", (req, res) => {
     if (!req.session.loggedIn) return res.status(403).redirect("/admin");
-
-    const { dias } = req.body;
+    
+    const { key, dias } = req.body;
     const diasValidade = parseInt(dias, 10);
 
-    if (isNaN(diasValidade)) {
-        return res.status(400).send("Número de dias inválido.");
+    if (!key || isNaN(diasValidade)) {
+        return res.status(400).send("Chave ou número de dias inválido.");
     }
 
     const keys = getKeys();
-    const novaChave = uuidv4(); // Gera uma chave única (ex: 1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed)
+    
+    if (keys.some(k => k.key === key)) {
+        return res.status(409).send("ERRO: Esta chave já existe no sistema.");
+    }
 
     const newKeyEntry = {
-        key: novaChave,
+        key: key,
         hwid: null,
         activatedAt: null,
         createdAt: Date.now(),
@@ -234,10 +205,9 @@ app.post("/admin/create", (req, res) => {
     keys.push(newKeyEntry);
     saveKeys(keys);
 
-    console.log(`Chave ${novaChave} criada pelo admin com ${diasValidade > 0 ? `${diasValidade} dias` : 'validade permanente'}.`);
+    console.log(`Chave "${key}" adicionada pelo admin com ${diasValidade > 0 ? `${diasValidade} dias` : 'validade permanente'}.`);
     return res.redirect("/admin/dashboard");
 });
-
 
 app.post("/admin/delete", (req, res) => {
   if (!req.session.loggedIn) return res.status(403).redirect("/admin");
@@ -264,11 +234,8 @@ app.get("/admin/logout", (req, res) => {
   });
 });
 
-
 // --- INICIALIZAÇÃO DO SERVIDOR ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Servidor rodando na porta ${PORT}`);
-  // Instale o uuid: npm install uuid
-  console.log("Certifique-se de ter instalado o pacote 'uuid' com: npm install uuid");
 });
